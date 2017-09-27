@@ -1,31 +1,47 @@
 #!/usr/bin/env python
 
-import re, time
+import re, time, random, sys, getopt
+from dateutil import parser
 from datetime import datetime
 
 
 def validDate(datestring):
     try:
-        datetime.strptime(datestring, "%b %d %H:%M:%S")
+        parser.parse(datestring)
         return True
     except ValueError:
         print "%s is not a valid datetime" % datestring
         return False
 
+opts, args = getopt.getopt(sys.argv[1:], "av")
+
+matches = {}
+verbose = 0
+addtag = 0
+bigcount = 0
+minute = datetime.now().strftime("%M")
+
+for o, a in opts:
+    if o == '-v':
+        verbose = 1
+    if o == '-a':
+        addtag = 1
+
 with open("/dev/stdin") as f:
+
+    # Compile regex patterns for iteration on each component of the message
     pats = {}
 
-    pats['pri'] = [re.compile(r'<(?P<pri>\d{1,3})>(?P<space>\s?)\w+')]
+    pats['pri'] = [re.compile(r'^<(?P<pri>\d{1,3})>(?P<space>\s?)\w+')]
 
     # Date/time
     datestrings = [r'\w+ [ \d]?\d \d\d:\d\d:\d\d [A-Z]{3}:', r'\w+ [ \d]?\d \d\d:\d\d:\d\d']
-    #datestrings = [r'\w+ [ \d]?\d \d\d:\d\d:\d\d']
     pats['date'] = []
     for i in datestrings:
         pats['date'].append(re.compile(r'(?P<date>' + i + r')(?P<space>\s+)\S+'))
 
     # Host/IP
-    hoststrings = [r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', r'[a-z0-9_-]+(\.[a-z0-9_-]+)*(\.[a-z]+)', r'[a-z0-9_-]+']
+    hoststrings = [r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', r'[a-z0-9_-]+(\.[a-z0-9_-]+)*(\.[a-z]+[0-9]?)', r'[a-z0-9_-]+']
     pats['host'] = []
     for i in hoststrings:
         pats['host'].append(re.compile(r'(?P<host>' + i + r')(?P<space>\s+)\S+'))
@@ -36,6 +52,7 @@ with open("/dev/stdin") as f:
     currentDict = {}
 
     for line in f:
+        bigcount += 1
         line.rstrip()
 
         # This -may- be a dangerous assumption, but anything starting with
@@ -45,28 +62,50 @@ with open("/dev/stdin") as f:
                 currentDict["text"] += ' ' + line.lstrip()
                 continue
 
-        line = '<123>' + line
+        if addtag == 1:
+            line = '<' + str(random.randint(0, 191)) + '>' + line
+
+        rawline = line
 
         skip = 0
         for pname in ['pri', 'date', 'host', 'text']:
+            gotmatch = 0
             #print "checking %s" % pname
             for p in pats[pname]:
+                if gotmatch > 0:
+                    continue
                 matched = p.match(line)
                 if matched:
-                    if pname == 'pri':
-                        if currentDict:
+                    gotmatch = 1
+
+                    # If we got a priority tag (which is the beginning
+                    # of a new log message) and still have a populated
+                    # object, dump it and reset the object
+                    if pname == 'pri' and currentDict:
+                        if verbose > 0:
                             print currentDict
-                            currentDict = {}
+
+                        currentDict = {}
 
                     if pname == 'date':
-                        if not validDate(matched.group('date')):
+                        if not validDate(matched.group('date').rstrip(':')):
                             currentDict['date'] = time.strftime("%b %d %H:%M:%S", time.gmtime())
 
-                    if pname == 'host' and matched.group(pname).startswith('v-webapp'):
-                        #print "skipping %s" % matched.group('host')
-                        skip = 1
-                        currentDict = {}
-                        break
+                    if pname == 'host':
+                        if 'host' in matches and matched.group(pname) in matches['host']:
+                            matches['host'][matched.group(pname)] += 1
+                        else:
+                            if 'host' not in matches:
+                                matches['host'] = {}
+
+                            print "new host: %s" % matched.group(pname)
+                            matches['host'][matched.group(pname)] = 1
+
+                        if matched.group(pname).startswith('v-webapp'):
+                            #print "skipping %s" % matched.group('host')
+                            skip = 1
+                            currentDict = {}
+                            break
 
                     if pname == 'pri':
                         currentDict['severity'] = int(matched.group('pri')) & 7
@@ -74,15 +113,11 @@ with open("/dev/stdin") as f:
 
                     currentDict[pname] = matched.group(pname)
 
-                    #print "line: %s" % line
-
-#                    if pname != 'text':
-                        # Lop off what we've already processed
                     line = line[matched.end('space'):]
 
                     #currentDict = {"tag": matched.group('pri'), "date": matched.group('date'), "host": matched.group('host'), "text": matched.group('text'), "severity": logsev, "facility": logfac}
-#                else:
-#                    print "did not match %s: %s" % (pname, line)
+                #else:
+                #    print "did not match %s: %s" % (pname, line)
             else:
                 continue
             break
@@ -96,4 +131,14 @@ with open("/dev/stdin") as f:
                 if currentDict:
                     print currentDict
                     currentDict = {}
+
+        if int(datetime.now().strftime("%M")) != minute:
+            minute = int(datetime.now().strftime("%M"))
+            print "%28s Message count: %d" % (str(datetime.now()), bigcount)
+
+
+print "done"
+
+for h in matches['host'].keys():
+    print "%s: %d" % (h, matches['host'][h])
 
