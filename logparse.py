@@ -69,15 +69,11 @@ with open("/dev/stdin") as f:
 
         skip = 0
         for pname in ['pri', 'date', 'host', 'text']:
-            gotmatch = 0
             #print "checking %s" % pname
             for p in pats[pname]:
-                if gotmatch > 0:
-                    continue
                 matched = p.match(line)
-                if matched:
-                    gotmatch = 1
 
+                if matched:
                     # If we got a priority tag (which is the beginning
                     # of a new log message) and still have a populated
                     # object, dump it and reset the object
@@ -110,17 +106,14 @@ with open("/dev/stdin") as f:
                     if pname == 'pri':
                         currentDict['severity'] = int(matched.group('pri')) & 7
                         currentDict['facility'] = int(matched.group('pri')) >> 3
-
-                    currentDict[pname] = matched.group(pname)
+                    else:
+                        # We don't store pri itself, but do store any others
+                        currentDict[pname] = matched.group(pname)
 
                     line = line[matched.end('space'):]
 
-                    #currentDict = {"tag": matched.group('pri'), "date": matched.group('date'), "host": matched.group('host'), "text": matched.group('text'), "severity": logsev, "facility": logfac}
-                #else:
-                #    print "did not match %s: %s" % (pname, line)
-            else:
-                continue
-            break
+                    # We matched this element so no need to keep looping on it
+                    break
 
         if skip == 0:
             if len(line) > 0:
