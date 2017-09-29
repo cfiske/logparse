@@ -18,7 +18,7 @@ opts, args = getopt.getopt(sys.argv[1:], "av")
 matches = {}
 verbose = 0
 addtag = 0
-bigcount = 0
+skipcount = 0
 minute = datetime.now().strftime("%M")
 
 for o, a in opts:
@@ -51,8 +51,9 @@ with open("/dev/stdin") as f:
 
     currentDict = {}
 
+    messages = []
+
     for line in f:
-        bigcount += 1
         line.rstrip()
 
         # This -may- be a dangerous assumption, but anything starting with
@@ -77,38 +78,29 @@ with open("/dev/stdin") as f:
                     # If we got a priority tag (which is the beginning
                     # of a new log message) and still have a populated
                     # object, dump it and reset the object
-                    if pname == 'pri' and currentDict:
-                        if verbose > 0:
-                            print currentDict
+                    if pname == 'pri':
+                        currentDict['severity'] = int(matched.group('pri')) & 7
+                        currentDict['facility'] = int(matched.group('pri')) >> 3
+                        if currentDict:
+                            if verbose > 0:
+                                print currentDict
 
-                        currentDict = {}
+                            messages.append(currentDict)
+                            currentDict = {}
 
                     if pname == 'date':
                         if not validDate(matched.group('date').rstrip(':')):
                             currentDict['date'] = time.strftime("%b %d %H:%M:%S", time.gmtime())
 
                     if pname == 'host':
-                        if 'host' in matches and matched.group(pname) in matches['host']:
-                            matches['host'][matched.group(pname)] += 1
-                        else:
-                            if 'host' not in matches:
-                                matches['host'] = {}
-
-                            print "new host: %s" % matched.group(pname)
-                            matches['host'][matched.group(pname)] = 1
-
                         if matched.group(pname).startswith('v-webapp'):
                             #print "skipping %s" % matched.group('host')
                             skip = 1
+                            skipcount += 1
                             currentDict = {}
                             break
 
-                    if pname == 'pri':
-                        currentDict['severity'] = int(matched.group('pri')) & 7
-                        currentDict['facility'] = int(matched.group('pri')) >> 3
-                    else:
-                        # We don't store pri itself, but do store any others
-                        currentDict[pname] = matched.group(pname)
+                    currentDict[pname] = matched.group(pname)
 
                     line = line[matched.end('space'):]
 
@@ -121,17 +113,29 @@ with open("/dev/stdin") as f:
 
             if currentDict == {}:
                 print "matched nothing: %s" % line
-                if currentDict:
-                    print currentDict
-                    currentDict = {}
+            else:
+                messages.append(currentDict)
+                currentDict = {}
 
         if int(datetime.now().strftime("%M")) != minute:
             minute = int(datetime.now().strftime("%M"))
-            print "%28s Message count: %d" % (str(datetime.now()), bigcount)
+            print "%28s Messages parsed: %d  Skipped: %d" % (str(datetime.now()), len(messages), skipcount)
 
 
 print "done"
 
+
+for message in messages:
+    if 'host' in matches and message['host'] in matches['host']:
+        matches['host'][message['host']] += 1
+    else:
+        if 'host' not in matches:
+            matches['host'] = {}
+
+        matches['host'][message['host']] = 1
+
 for h in matches['host'].keys():
     print "%s: %d" % (h, matches['host'][h])
+
+print "Skipped: %d" % (skipcount)
 
