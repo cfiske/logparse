@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
 import re, time, random, sys, getopt
+
 from dateutil import parser
 from datetime import datetime
+
+import Device
 
 
 def validDate(datestring):
@@ -53,6 +56,8 @@ with open("/dev/stdin") as f:
 
     messages = []
 
+    juniper = Device.Juniper('logs')
+
     for line in f:
         line.rstrip()
 
@@ -68,7 +73,6 @@ with open("/dev/stdin") as f:
 
         rawline = line
 
-        skip = 0
         for pname in ['pri', 'date', 'host', 'text']:
             #print "checking %s" % pname
             for p in pats[pname]:
@@ -92,14 +96,6 @@ with open("/dev/stdin") as f:
                         if not validDate(matched.group('date').rstrip(':')):
                             currentDict['date'] = time.strftime("%b %d %H:%M:%S", time.gmtime())
 
-                    if pname == 'host':
-                        if matched.group(pname).startswith('v-webapp'):
-                            #print "skipping %s" % matched.group('host')
-                            skip = 1
-                            skipcount += 1
-                            currentDict = {}
-                            break
-
                     currentDict[pname] = matched.group(pname)
 
                     line = line[matched.end('space'):]
@@ -107,13 +103,21 @@ with open("/dev/stdin") as f:
                     # We matched this element so no need to keep looping on it
                     break
 
-        if skip == 0:
-            if len(line) > 0:
-                print "still some line left: %s" % line
+        if len(line) > 0:
+            print "still some line left: %s" % line
 
-            if currentDict == {}:
-                print "matched nothing: %s" % line
-            else:
+        if currentDict == {}:
+            print "matched nothing: %s" % line
+        else:
+            skip = 0
+            if juniper.matchLogPattern(currentDict):
+                if currentDict['state'] == 0:
+                    skip = 1
+                    skipcount += 1
+#            else:
+#                print "Did not match Juniper message: %s" % (currentDict['text'])
+
+            if skip == 0:
                 messages.append(currentDict)
                 currentDict = {}
 
