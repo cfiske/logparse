@@ -57,6 +57,7 @@ with open("/dev/stdin") as f:
     messages = []
 
     juniper = Device.Juniper('logs')
+    linux = Device.Linux('logs')
 
     for line in f:
         line.rstrip()
@@ -108,12 +109,21 @@ with open("/dev/stdin") as f:
 
         if currentDict == {}:
             print "matched nothing: %s" % line
+        elif currentDict['text'].find('last message repeated') == 0:
+            continue
         else:
             skip = 0
-            if juniper.matchLogPattern(currentDict):
-                if currentDict['state'] == 0:
-                    skip = 1
-                    skipcount += 1
+            #print "checking host %s" % currentDict['host']
+            if currentDict['host'].find('v-') == 0:
+                if linux.matchLogPattern(currentDict):
+                    if currentDict['state'] == 0:
+                        skip = 1
+                        skipcount += 1
+            else:
+                if juniper.matchLogPattern(currentDict):
+                    if currentDict['state'] == 0:
+                        skip = 1
+                        skipcount += 1
 #            else:
 #                print "Did not match Juniper message: %s" % (currentDict['text'])
 
