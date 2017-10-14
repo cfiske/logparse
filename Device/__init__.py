@@ -2,8 +2,9 @@ import re
 
 class Device(object):
 
-    def __init__(self, name):
+    def __init__(self, name, verbose=False):
         self.name = name
+        self.verbose = verbose
         self.vendor = 'Generic'
         self.logPatterns = {}
 
@@ -25,7 +26,9 @@ class Device(object):
                     message['state'] = 0
                     return 1
 
-                #print "matched pattern id %s with text: %s" % (pattern['id'], message['text'])
+                if self.verbose is True:
+                    print "matched pattern id %s with text: %s" % (pattern['id'], message['text'])
+
                 for k in pattern:
                     message[k] = pattern[k]
 
@@ -101,56 +104,63 @@ class Device(object):
 
 class A10(Device):
 
-    def __init__(self, name):
+    def __init__(self, name, verbose=False):
         self.name = name
+        self.verbose = verbose
         self.vendor = 'A10'
         self.logPatterns = {}
 
 
 class Arista(Device):
 
-    def __init__(self, name):
+    def __init__(self, name, verbose=False):
         self.name = name
+        self.verbose = verbose
         self.vendor = 'Arista'
         self.logPatterns = {}
 
 
 class Brocade(Device):
 
-    def __init__(self, name):
+    def __init__(self, name, verbose=False):
         self.name = name
+        self.verbose = verbose
         self.vendor = 'Brocade'
         self.logPatterns = {}
 
 
 class Cisco(Device):
 
-    def __init__(self, name):
+    def __init__(self, name, verbose=False):
         self.name = name
+        self.verbose = verbose
         self.vendor = 'Cisco'
         self.logPatterns = {}
 
 
 class F5(Device):
 
-    def __init__(self, name):
+    def __init__(self, name, verbose=False):
         self.name = name
+        self.verbose = verbose
         self.vendor = 'F5'
         self.logPatterns = {}
 
 
 class Force10(Device):
 
-    def __init__(self, name):
+    def __init__(self, name, verbose=False):
         self.name = name
+        self.verbose = verbose
         self.vendor = 'Force10'
         self.logPatterns = {}
 
 
 class Linux(Device):
 
-    def __init__(self, name):
+    def __init__(self, name, verbose=False):
         self.name = name
+        self.verbose = verbose
         self.vendor = 'Linux'
         self.logPatterns = {}
 
@@ -163,8 +173,9 @@ class Linux(Device):
 
 class Juniper(Device):
 
-    def __init__(self, name):
+    def __init__(self, name, verbose=False):
         self.name = name
+        self.verbose = verbose
         self.vendor = 'Juniper'
         self.logPatterns = {}
 
@@ -346,5 +357,6 @@ class Juniper(Device):
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>CMT): fpc \d+ hsl type \d+', 4404, 3, 600, ['instance','port'])
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>cmic_plat_dfe_coarse_tuning)_(start|stop): CMIC\(\d+/\d+\) (start|stop) DFE (adaptive )?tuning for (?P<port>\S+)', 4405, 3, 600, ['instance','port'])
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>cmic_vsc8248_ready_for_dfe): CMIC\(\d+/\d+\)\(\d\) - VSC8248 EDC FW unexpectedly in state \d+', 4406, 3, 600, ['instance'])
+        self.addLogPattern(r'^(?P<instance>fpc\d+) SYSLOG: \d+ messages? lost, message queue overflowed', 4407, 3, 600, [])
 
 
