@@ -63,7 +63,7 @@ with open("/dev/stdin") as f:
     hoststrings = [r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', r'[a-z0-9_-]+(\.[a-z0-9_-]+)*(\.[a-z]+[0-9]?)', r'[a-z0-9_-]+']
     pats['host'] = []
     for i in hoststrings:
-        pats['host'].append(re.compile(r'(?P<host>' + i + r')(?P<space>\s+)\S+'))
+        pats['host'].append(re.compile(r'(?P<host>' + i + r')(?P<space>\s+)\S+', re.IGNORECASE))
 
     # Rest of line
     pats['text'] = [re.compile(r'(?P<text>\S.*)(?P<space>\s*)$')]
@@ -153,7 +153,7 @@ with open("/dev/stdin") as f:
                     else:
                         jsonDict['@timestamp'] = currentDict['date']
 
-                    jsonDict['host'] = currentDict['host']
+                    jsonDict['host'] = currentDict['host'].lower()
                     jsonDict['message'] = currentDict['text']
                     jsonDict['msg_type'] = currentDict['id']
 
