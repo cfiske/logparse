@@ -73,6 +73,10 @@ with open("/dev/stdin") as f:
 
     messages = []
 
+    a10 = Device.A10('logs')
+    arista = Device.Arista('logs')
+    brocade = Device.Brocade('logs')
+    force10 = Device.Force10('logs')
     juniper = Device.Juniper('logs')
     linux = Device.Linux('logs')
 
@@ -114,7 +118,10 @@ with open("/dev/stdin") as f:
                     if pname == 'date':
                         currentDict['date'] = makeDate(matched.group('date').rstrip(':'))
 
-                    currentDict[pname] = matched.group(pname)
+                    if pname == 'host':
+                        currentDict[pname] = matched.group(pname).lower()
+                    else:
+                        currentDict[pname] = matched.group(pname)
 
                     line = line[matched.end('space'):]
 
@@ -138,13 +145,52 @@ with open("/dev/stdin") as f:
                     if currentDict['state'] == 0:
                         skip = 1
                         skipcount += 1
-            elif juniper.matchLogPattern(currentDict):
-                if currentDict['state'] == 0:
-                    skip = 1
-                    skipcount += 1
+                else:
+                    print "Did not match Linux message for host %s: %s" % (currentDict['host'], currentDict['text'])
+
+            elif currentDict['host'].find('bar') == 0 or currentDict['host'].find('bcr') == 0 or currentDict['host'].find('scr') == 0 or currentDict['host'].find('sff') == 0 or currentDict['host'].find('mfw') == 0 or currentDict['host'].find('re') == 0 or currentDict['host'].find('trr1-3-') == 0:
+                if juniper.matchLogPattern(currentDict):
+                    if currentDict['state'] == 0:
+                        skip = 1
+                        skipcount += 1
+                else:
+                    print "Did not match Juniper message for host %s: %s" % (currentDict['host'], currentDict['text'])
+
+            elif currentDict['host'].find('ma') == 0 or currentDict['host'].find('trr') == 0 or currentDict['host'].find('spr') == 0 or currentDict['host'].find('ssr') == 0 or currentDict['host'].find('ser') == 0:
+                if arista.matchLogPattern(currentDict):
+                    if currentDict['state'] == 0:
+                        skip = 1
+                        skipcount += 1
+                else:
+                    print "Did not match Arista message for host %s: %s" % (currentDict['host'], currentDict['text'])
+
+            elif currentDict['host'].find('slb') == 0 or currentDict['host'].find('mlb') == 0 or currentDict['host'].find('glb') == 0 or currentDict['host'].find('vpr') == 0 or currentDict['host'].find('lb') == 0:
+                if a10.matchLogPattern(currentDict):
+                    if currentDict['state'] == 0:
+                        skip = 1
+                        skipcount += 1
+                else:
+                    print "Did not match A10 message for host %s: %s" % (currentDict['host'], currentDict['text'])
+
+            elif currentDict['host'].find('r1') == 0 or currentDict['host'].find('r2') == 0 or currentDict['host'].find('sw') == 0:
+                if brocade.matchLogPattern(currentDict):
+                    if currentDict['state'] == 0:
+                        skip = 1
+                        skipcount += 1
+                else:
+                    print "Did not match Brocade message for host %s: %s" % (currentDict['host'], currentDict['text'])
+
+            elif currentDict['host'].find('10.1') == 0:
+                if force10.matchLogPattern(currentDict):
+                    if currentDict['state'] == 0:
+                        skip = 1
+                        skipcount += 1
+                else:
+                    print "Did not match Force10 message for host %s: %s" % (currentDict['host'], currentDict['text'])
+
             else:
                 if verbose > 0:
-                    print "Did not match Juniper message: %s" % (currentDict['text'])
+                    print "Did not match host pattern for host: %s  message: %s" % (currentDict['host'], currentDict['text'])
 
             if skip == 0:
                 if use_json > 0:
