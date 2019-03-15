@@ -76,6 +76,7 @@ with open("/dev/stdin") as f:
     a10 = Device.A10('logs')
     arista = Device.Arista('logs')
     brocade = Device.Brocade('logs')
+    f5 = Device.F5('logs')
     force10 = Device.Force10('logs')
     juniper = Device.Juniper('logs')
     linux = Device.Linux('logs')
@@ -179,6 +180,14 @@ with open("/dev/stdin") as f:
                             skipcount += 1
                     else:
                         print "Did not match A10 message for host %s: %s" % (currentDict['host'], currentDict['text'])
+
+                elif currentDict['host'].find('lb') == 0:
+                    if f5.matchLogPattern(currentDict):
+                        if currentDict['state'] == 0:
+                            skip = 1
+                            skipcount += 1
+                    else:
+                        print "Did not match F5 message for host %s: %s" % (currentDict['host'], currentDict['text'])
 
                 elif currentDict['host'].find('r1') == 0 or currentDict['host'].find('r2') == 0 or currentDict['host'].find('sw') == 0:
                     if brocade.matchLogPattern(currentDict):
