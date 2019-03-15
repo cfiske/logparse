@@ -81,14 +81,18 @@ with open("/dev/stdin") as f:
     linux = Device.Linux('logs')
 
     for line in f:
-        line.rstrip()
-
         # This -may- be a dangerous assumption, but anything starting with
         # a space is typically a continuation of the previous line
         if line[0].isspace():
             if currentDict:
                 currentDict["text"] += ' ' + line.lstrip()
                 continue
+
+        # XXX - May or may not need this for direct rsyslog but some logfiles
+        #       have occasional lines prefixed with a bunch of nulls
+        if line[0] == '\0':
+            # XXX - This is probably terrible code, but may be faster than regex?
+            line = line[(line.find(' ') - 3):]
 
         if addtag == 1:
             line = '<' + str(random.randint(9, 191)) + '>' + line
@@ -128,11 +132,14 @@ with open("/dev/stdin") as f:
                     # We matched this element so no need to keep looping on it
                     break
 
+        # Chop off any remaining crap
+        line = line.rstrip()
+
         if len(line) > 0:
-            print "still some line left: %s" % line
+            print "still some line left: [%s]" % line
 
         if currentDict == {}:
-            print "matched nothing: %s" % line
+            print "matched nothing: [%s]" % line
 
         elif currentDict['text'].find('last message repeated') == 0:
             continue
@@ -140,57 +147,64 @@ with open("/dev/stdin") as f:
         else:
             skip = 0
 
-            if currentDict['host'].find('v-') == 0:
-                if linux.matchLogPattern(currentDict):
-                    if currentDict['state'] == 0:
-                        skip = 1
-                        skipcount += 1
-                else:
-                    print "Did not match Linux message for host %s: %s" % (currentDict['host'], currentDict['text'])
+            try:
+                if currentDict['host'].find('v-') == 0:
+                    if linux.matchLogPattern(currentDict):
+                        if currentDict['state'] == 0:
+                            skip = 1
+                            skipcount += 1
+                    else:
+                        print "Did not match Linux message for host %s: %s" % (currentDict['host'], currentDict['text'])
 
-            elif currentDict['host'].find('bar') == 0 or currentDict['host'].find('bcr') == 0 or currentDict['host'].find('scr') == 0 or currentDict['host'].find('sff') == 0 or currentDict['host'].find('mfw') == 0 or currentDict['host'].find('re') == 0 or currentDict['host'].find('trr1-3-') == 0:
-                if juniper.matchLogPattern(currentDict):
-                    if currentDict['state'] == 0:
-                        skip = 1
-                        skipcount += 1
-                else:
-                    print "Did not match Juniper message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                elif currentDict['host'].find('bar') == 0 or currentDict['host'].find('bcr') == 0 or currentDict['host'].find('scr') == 0 or currentDict['host'].find('sff') == 0 or currentDict['host'].find('mfw') == 0 or currentDict['host'].find('re') == 0 or currentDict['host'].find('trr1-3-') == 0:
+                    if juniper.matchLogPattern(currentDict):
+                        if currentDict['state'] == 0:
+                            skip = 1
+                            skipcount += 1
+                    else:
+                        print "Did not match Juniper message for host %s: %s" % (currentDict['host'], currentDict['text'])
 
-            elif currentDict['host'].find('ma') == 0 or currentDict['host'].find('trr') == 0 or currentDict['host'].find('spr') == 0 or currentDict['host'].find('ssr') == 0 or currentDict['host'].find('ser') == 0:
-                if arista.matchLogPattern(currentDict):
-                    if currentDict['state'] == 0:
-                        skip = 1
-                        skipcount += 1
-                else:
-                    print "Did not match Arista message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                elif currentDict['host'].find('ma') == 0 or currentDict['host'].find('trr') == 0 or currentDict['host'].find('spr') == 0 or currentDict['host'].find('ssr') == 0 or currentDict['host'].find('ser') == 0:
+                    if arista.matchLogPattern(currentDict):
+                        if currentDict['state'] == 0:
+                            skip = 1
+                            skipcount += 1
+                    else:
+                        print "Did not match Arista message for host %s: %s" % (currentDict['host'], currentDict['text'])
 
-            elif currentDict['host'].find('slb') == 0 or currentDict['host'].find('mlb') == 0 or currentDict['host'].find('glb') == 0 or currentDict['host'].find('vpr') == 0 or currentDict['host'].find('lb') == 0:
-                if a10.matchLogPattern(currentDict):
-                    if currentDict['state'] == 0:
-                        skip = 1
-                        skipcount += 1
-                else:
-                    print "Did not match A10 message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                elif currentDict['host'].find('slb') == 0 or currentDict['host'].find('mlb') == 0 or currentDict['host'].find('glb') == 0 or currentDict['host'].find('vpr') == 0:
+                    if a10.matchLogPattern(currentDict):
+                        if currentDict['state'] == 0:
+                            skip = 1
+                            skipcount += 1
+                    else:
+                        print "Did not match A10 message for host %s: %s" % (currentDict['host'], currentDict['text'])
 
-            elif currentDict['host'].find('r1') == 0 or currentDict['host'].find('r2') == 0 or currentDict['host'].find('sw') == 0:
-                if brocade.matchLogPattern(currentDict):
-                    if currentDict['state'] == 0:
-                        skip = 1
-                        skipcount += 1
-                else:
-                    print "Did not match Brocade message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                elif currentDict['host'].find('r1') == 0 or currentDict['host'].find('r2') == 0 or currentDict['host'].find('sw') == 0:
+                    if brocade.matchLogPattern(currentDict):
+                        if currentDict['state'] == 0:
+                            skip = 1
+                            skipcount += 1
+                    else:
+                        print "Did not match Brocade message for host %s: %s" % (currentDict['host'], currentDict['text'])
 
-            elif currentDict['host'].find('10.1') == 0:
-                if force10.matchLogPattern(currentDict):
-                    if currentDict['state'] == 0:
-                        skip = 1
-                        skipcount += 1
-                else:
-                    print "Did not match Force10 message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                elif currentDict['host'].find('10.1') == 0:
+                    if force10.matchLogPattern(currentDict):
+                        if currentDict['state'] == 0:
+                            skip = 1
+                            skipcount += 1
+                    else:
+                        print "Did not match Force10 message for host %s: %s" % (currentDict['host'], currentDict['text'])
 
-            else:
-                if verbose > 0:
-                    print "Did not match host pattern for host: %s  message: %s" % (currentDict['host'], currentDict['text'])
+                else:
+                    if verbose > 0:
+                        print "Did not match host pattern for host: %s  message: %s" % (currentDict['host'], currentDict['text'])
+
+            except KeyError:
+                print "Field not found:", currentDict
+
+                skip = 1
+                skipcount += 1
 
             if skip == 0:
                 if use_json > 0:
