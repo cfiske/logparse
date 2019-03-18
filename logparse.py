@@ -61,7 +61,7 @@ def generateDicts(log_fh):
     juniper = Device.Juniper('logs')
     linux = Device.Linux('logs')
 
-    for line in f:
+    for line in log_fh:
         # This -may- be a dangerous assumption, but anything starting with
         # a space is typically a continuation of the previous line
         if line[0].isspace():
