@@ -74,11 +74,9 @@ def generateDicts(sock):
                     currentDict["text"] += ' ' + line.lstrip()
                     continue
 
-            # XXX - May or may not need this for direct rsyslog but some logfiles
-            #       have occasional lines prefixed with a bunch of nulls
+            # Strip any leading junk
             if line[0] == '\0':
-                # XXX - This is probably terrible code, but may be faster than regex?
-                line = line[(line.find(' ') - 3):]
+                line = line.lstrip('\r\n\0')
 
             for pname in ['pri', 'date', 'host', 'text']:
                 for p in pats[pname]:
