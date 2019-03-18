@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/bin/env python
 
 import re, time, random, sys, getopt, json, copy
 
@@ -19,59 +19,39 @@ def makeDate(datestring):
 
     return str(d.strftime("%Y-%m-%dT%H:%M:%S.%f"))
 
-opts, args = getopt.getopt(sys.argv[1:], "ajv")
 
-matches = {}
-verbose = 0
-use_json = 0
-addtag = 0
-skipcount = 0
-minute = datetime.utcnow().strftime("%M")
-
-# define mandatory fields here
-baseDict = {
-    "host": 'UNKNOWN',
-    "facility": 'UNKNOWN',
-    "severity": 'debug',
-    "msg_type": 'UNKNOWN',
-    "message": 'UNKNOWN'
-}
-
-
-for o, a in opts:
-    if o == '-v':
-        verbose = 1
-    if o == '-a':
-        addtag = 1
-    if o == '-j':
-        use_json = 1
-
-with open("/dev/stdin") as f:
+def generateDicts(log_fh):
+    skipcount = 0
 
     # Compile regex patterns for iteration on each component of the message
     pats = {}
 
-    pats['pri'] = [re.compile(r'^<(?P<pri>\d{1,3})>(?P<space>\s?)\w+')]
+    pristrings = [r'^<(?P<pri>\d{1,3})>(\d*:?)?']
+    pats['pri'] = []
+    for i in pristrings:
+        pats['pri'].append(re.compile(i + r'(?P<space>\s?)\S+'))
 
     # Date/time
-    datestrings = [r'\w+ [ \d]?\d \d\d:\d\d:\d\d [A-Z]{3}:', r'\w+ [ \d]?\d \d\d:\d\d:\d\d']
+    datestrings = [r'(?P<date>[A-Za-z]+ [ \d]?\d \d\d:\d\d:\d\d( [A-Z]{3}:)?)',
+                   r'(?P<date>\d{4} [A-Za-z]+ [ \d]?\d \d\d:\d\d:\d\d( [A-Z]{3}:)?)',
+                   r'(?P<date>\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z)']
     pats['date'] = []
     for i in datestrings:
-        pats['date'].append(re.compile(r'(?P<date>' + i + r')(?P<space>\s+)\S+'))
+        pats['date'].append(re.compile(i + r'(?P<space>\s+)\S+'))
 
     # Host/IP
-    hoststrings = [r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', r'[a-z0-9_-]+(\.[a-z0-9_-]+)*(\.[a-z]+[0-9]?)', r'[a-z0-9_-]+']
+    hoststrings = [r'(?P<host>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})',
+                   r'(?P<host>[a-z0-9_-]+(\.[a-z0-9_-]+)*(\.[a-z]+[0-9]?))',
+                   r'(?P<host>[a-z0-9_-]+)']
     pats['host'] = []
     for i in hoststrings:
-        pats['host'].append(re.compile(r'(?P<host>' + i + r')(?P<space>\s+)\S+', re.IGNORECASE))
+        pats['host'].append(re.compile(i + r'(?P<space>\s+)\S+', re.IGNORECASE))
 
     # Rest of line
-    pats['text'] = [re.compile(r'(?P<text>\S.*)(?P<space>\s*)$')]
+    pats['text'] = [re.compile(r'(?P<text>.*)(?P<space>\s*)$')]
 
     currentDict = {}
     jsonDict = copy.deepcopy(baseDict)
-
-    messages = []
 
     a10 = Device.A10('logs')
     arista = Device.Arista('logs')
@@ -95,11 +75,6 @@ with open("/dev/stdin") as f:
             # XXX - This is probably terrible code, but may be faster than regex?
             line = line[(line.find(' ') - 3):]
 
-        if addtag == 1:
-            line = '<' + str(random.randint(9, 191)) + '>' + line
-
-        rawline = line
-
         for pname in ['pri', 'date', 'host', 'text']:
             for p in pats[pname]:
                 matched = p.match(line)
@@ -110,10 +85,7 @@ with open("/dev/stdin") as f:
                     # object, dump it and reset the object
                     if pname == 'pri':
                         if currentDict:
-                            if verbose > 0:
-                                print currentDict
-
-                            messages.append(currentDict)
+                            yield(currentDict)
                             currentDict = {}
 
                         else:
@@ -132,6 +104,9 @@ with open("/dev/stdin") as f:
 
                     # We matched this element so no need to keep looping on it
                     break
+
+            if pname not in currentDict:
+                print "Did not match for %s: %s" % (pname, line)
 
         # Chop off any remaining crap
         line = line.rstrip()
@@ -157,7 +132,7 @@ with open("/dev/stdin") as f:
                     else:
                         print "Did not match Linux message for host %s: %s" % (currentDict['host'], currentDict['text'])
 
-                elif currentDict['host'].find('bar') == 0 or currentDict['host'].find('bcr') == 0 or currentDict['host'].find('scr') == 0 or currentDict['host'].find('sff') == 0 or currentDict['host'].find('mfw') == 0 or currentDict['host'].find('re') == 0 or currentDict['host'].find('trr1-3-') == 0:
+                elif currentDict['host'].find('bar') == 0 or currentDict['host'].find('bcr') == 0 or currentDict['host'].find('scr') == 0 or currentDict['host'].find('sff') == 0 or currentDict['host'].find('mfw') == 0 or currentDict['host'].find('re') == 0 or currentDict['host'].find('10.33') == 0:
                     if juniper.matchLogPattern(currentDict):
                         if currentDict['state'] == 0:
                             skip = 1
@@ -206,8 +181,7 @@ with open("/dev/stdin") as f:
                         print "Did not match Force10 message for host %s: %s" % (currentDict['host'], currentDict['text'])
 
                 else:
-                    if verbose > 0:
-                        print "Did not match host pattern for host: %s  message: %s" % (currentDict['host'], currentDict['text'])
+                    print "Did not match host pattern for host: %s  message: %s" % (currentDict['host'], currentDict['text'])
 
             except KeyError:
                 print "Field not found:", currentDict
@@ -216,34 +190,68 @@ with open("/dev/stdin") as f:
                 skipcount += 1
 
             if skip == 0:
-                if use_json > 0:
-                    if 'date' not in currentDict:
-                        jsonDict['@timestamp'] = makeDate('now')
-                    else:
-                        jsonDict['@timestamp'] = currentDict['date']
-
-                    jsonDict['host'] = currentDict['host'].lower()
-                    jsonDict['message'] = currentDict['text']
-                    jsonDict['msg_type'] = currentDict['id']
-
-                    # mmjsonparse in rsyslog won't parse JSON correctly without
-                    # the '@cee:@cee:' prefix
-                    print "@cee:@cee:" + json.dumps(jsonDict)
-                else:
-                    if verbose > 0:
-                        print currentDict
-
+                yield(currentDict)
                 currentDict = {}
+
+
+opts, args = getopt.getopt(sys.argv[1:], "jv")
+
+matches = {}
+messages = []
+verbose = 0
+use_json = 0
+minute = datetime.utcnow().strftime("%M")
+
+# define mandatory fields here
+baseDict = {
+    "host": 'UNKNOWN',
+    "facility": 'UNKNOWN',
+    "severity": 'debug',
+    "msg_type": 'UNKNOWN',
+    "message": 'UNKNOWN'
+}
+
+
+for o, a in opts:
+    if o == '-v':
+        verbose = 1
+    if o == '-j':
+        use_json = 1
+
+with open("/dev/stdin") as f:
+
+    for msgDict in generateDicts(f):
+        if msgDict['text'].find('RT_FLOW') != -1:
+            continue
+
+        #print "log: %s" % msgDict
+        messages.append(msgDict)
+
+        if use_json > 0:
+            if 'date' not in currentDict:
+                jsonDict['@timestamp'] = makeDate('now')
+            else:
+                jsonDict['@timestamp'] = currentDict['date']
+
+            jsonDict['host'] = currentDict['host'].lower()
+            jsonDict['message'] = currentDict['text']
+            jsonDict['msg_type'] = currentDict['id']
+
+            # mmjsonparse in rsyslog won't parse JSON correctly without
+            # the '@cee:@cee:' prefix
+            print "@cee:@cee:" + json.dumps(jsonDict)
+        else:
+            if verbose > 0:
+                print currentDict
 
         if int(datetime.utcnow().strftime("%M")) != minute:
             minute = int(datetime.now().strftime("%M"))
             if verbose > 0:
-                print "%28s Messages parsed: %d  Skipped: %d" % (str(datetime.utcnow()), len(messages), skipcount)
+                print "%28s Messages parsed: %d" % (str(datetime.utcnow()), len(messages))
 
 
 if verbose > 0:
     print "done"
-
 
 for message in messages:
     if 'host' in matches and message['host'] in matches['host']:
@@ -257,6 +265,4 @@ for message in messages:
 if verbose > 0:
     for h in matches['host'].keys():
         print "%s: %d" % (h, matches['host'][h])
-
-    print "Skipped: %d" % (skipcount)
 
