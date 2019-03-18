@@ -258,19 +258,3 @@ for msgDict in generateDicts(syslogSocket):
             print "%28s Messages parsed: %d" % (str(datetime.utcnow()), len(messages))
 
 
-if verbose > 0:
-    print "done"
-
-for message in messages:
-    if 'host' in matches and message['host'] in matches['host']:
-        matches['host'][message['host']] += 1
-    else:
-        if 'host' not in matches:
-            matches['host'] = {}
-
-        matches['host'][message['host']] = 1
-
-if verbose > 0:
-    for h in matches['host'].keys():
-        print "%s: %d" % (h, matches['host'][h])
-
