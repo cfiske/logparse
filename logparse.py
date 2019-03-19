@@ -98,8 +98,7 @@ def generateDicts(sock):
 
                         if pname == 'date':
                             currentDict['date'] = makeDate(matched.group('date').rstrip(':'))
-
-                        if pname == 'host':
+                        elif pname == 'host':
                             currentDict[pname] = matched.group(pname).lower()
                         else:
                             currentDict[pname] = matched.group(pname)
