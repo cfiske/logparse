@@ -88,8 +88,9 @@ def generateDicts(sock):
                         # object, dump it and reset the object
                         if pname == 'pri':
                             if currentDict:
-                                yield(currentDict)
-                                currentDict = {}
+                                if skip == 0:
+                                    yield(currentDict)
+                                    currentDict = {}
 
                             else:
                                 currentDict['severity'] = int(matched.group('pri')) & 7
@@ -125,66 +126,41 @@ def generateDicts(sock):
 
             else:
                 skip = 0
+                vendor = None
 
                 try:
                     if currentDict['host'].find('v-') == 0:
-                        if linux.matchLogPattern(currentDict):
-                            if currentDict['state'] == 0:
-                                skip = 1
-                                skipcount += 1
-                        else:
-                            print "Did not match Linux message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                        vendor = linux
 
                     elif currentDict['host'].find('bar') == 0 or currentDict['host'].find('bcr') == 0 or currentDict['host'].find('scr') == 0 or currentDict['host'].find('sff') == 0 or currentDict['host'].find('mfw') == 0 or currentDict['host'].find('re') == 0 or currentDict['host'].find('bmr') == 0  or currentDict['host'].find('fw') == 0:
-                        if juniper.matchLogPattern(currentDict):
-                            if currentDict['state'] == 0:
-                                skip = 1
-                                skipcount += 1
-                        else:
-                            print "Did not match Juniper message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                        vendor = juniper
 
                     elif currentDict['host'].find('ma') == 0 or currentDict['host'].find('trr') == 0 or currentDict['host'].find('spr') == 0 or currentDict['host'].find('ssr') == 0 or currentDict['host'].find('ser') == 0:
-                        if arista.matchLogPattern(currentDict):
-                            if currentDict['state'] == 0:
-                                skip = 1
-                                skipcount += 1
-                        else:
-                            print "Did not match Arista message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                        vendor = arista
 
                     elif currentDict['host'].find('slb') == 0 or currentDict['host'].find('mlb') == 0 or currentDict['host'].find('glb') == 0 or currentDict['host'].find('vpr') == 0:
-                        if a10.matchLogPattern(currentDict):
-                            if currentDict['state'] == 0:
-                                skip = 1
-                                skipcount += 1
-                        else:
-                            print "Did not match A10 message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                        vendor = a10
 
                     elif currentDict['host'].find('lb') == 0:
-                        if f5.matchLogPattern(currentDict):
-                            if currentDict['state'] == 0:
-                                skip = 1
-                                skipcount += 1
-                        else:
-                            print "Did not match F5 message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                        vendor = f5
 
                     elif currentDict['host'].find('r1') == 0 or currentDict['host'].find('r2') == 0 or currentDict['host'].find('sw') == 0:
-                        if brocade.matchLogPattern(currentDict):
-                            if currentDict['state'] == 0:
-                                skip = 1
-                                skipcount += 1
-                        else:
-                            print "Did not match Brocade message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                        vendor = brocade
 
                     elif currentDict['host'].find('10.1') == 0:
-                        if force10.matchLogPattern(currentDict):
+                        vendor = force10
+
+                    if vendor:
+                        if vendor.matchLogPattern(currentDict):
                             if currentDict['state'] == 0:
                                 skip = 1
                                 skipcount += 1
                         else:
-                            print "Did not match Force10 message for host %s: %s" % (currentDict['host'], currentDict['text'])
+                            print "Did not match %s message for host %s: %s" % (vendor.vendor, currentDict['host'], currentDict['text'])
 
                     else:
                         print "Did not match host pattern for host: %s  message: %s" % (currentDict['host'], currentDict['text'])
+
 
                 except KeyError:
                     print "Field not found:", currentDict
@@ -234,21 +210,25 @@ for msgDict in generateDicts(syslogSocket):
 
     if use_json > 0:
         jsonDict = copy.deepcopy(baseDict)
-        if 'date' not in currentDict:
+        if 'date' not in msgDict:
             jsonDict['@timestamp'] = makeDate('now')
         else:
-            jsonDict['@timestamp'] = currentDict['date']
+            jsonDict['@timestamp'] = msgDict['date']
 
-        jsonDict['host'] = currentDict['host'].lower()
-        jsonDict['message'] = currentDict['text']
-        jsonDict['msg_type'] = currentDict['id']
+        jsonDict['host'] = msgDict['host'].lower()
+        jsonDict['message'] = msgDict['text']
+        if 'id' in msgDict:
+            jsonDict['msg_type'] = msgDict['id']
+        else:
+            jsonDict['msg_type'] = msgDict['text'].partition(' ')[0]
+
 
         # mmjsonparse in rsyslog won't parse JSON correctly without
         # the '@cee:@cee:' prefix
         print "@cee:@cee:" + json.dumps(jsonDict)
     else:
         if verbose > 0:
-            print currentDict
+            print msgDict
 
     if int(datetime.utcnow().strftime("%M")) != minute:
         minute = int(datetime.now().strftime("%M"))
