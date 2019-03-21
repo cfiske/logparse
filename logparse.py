@@ -20,8 +20,15 @@ def makeDate(datestring):
 
     return str(d.strftime("%Y-%m-%dT%H:%M:%S.%f"))
 
+def resolveHostname(ip):
+    try:
+        (host, null, null) = socket.gethostbyaddr(ip)
+    except socket.herror:
+        host = ip
+    return host
 
 def generateDicts(sock):
+    skip = 0
     skipcount = 0
 
     # Compile regex patterns for iteration on each component of the message
@@ -65,67 +72,61 @@ def generateDicts(sock):
         inready, outready, excready = select([sock], [], [])
 
         for s in inready:
-            line, src_ip = s.recvfrom(8192)
+            # We can safely init the dict here because multiline messages are
+            # still contained within single datagrams
+            currentDict = {}
 
-            # This -may- be a dangerous assumption, but anything starting with
-            # a space is typically a continuation of the previous line
-            if line[0].isspace():
-                if currentDict:
-                    currentDict["text"] += ' ' + line.lstrip()
-                    continue
-
+            line, (src_ip, port) = s.recvfrom(8192)
             # Strip any leading junk
             if line[0] == '\0':
-                line = line.lstrip('\r\n\0')
+                line = line.lstrip('\r\n\0 ')
 
             for pname in ['pri', 'date', 'host', 'text']:
                 for p in pats[pname]:
                     matched = p.match(line)
 
                     if matched:
-                        # If we got a priority tag (which is the beginning
-                        # of a new log message) and still have a populated
-                        # object, dump it and reset the object
                         if pname == 'pri':
-                            if currentDict:
-                                if skip == 0:
-                                    yield(currentDict)
-                                    currentDict = {}
+                            currentDict['severity'] = str(int(matched.group('pri')) & 7)
+                            currentDict['facility'] = str(int(matched.group('pri')) >> 3)
 
-                            else:
-                                currentDict['severity'] = int(matched.group('pri')) & 7
-                                currentDict['facility'] = int(matched.group('pri')) >> 3
+                        currentDict[pname] = matched.group(pname)
 
-                        if pname == 'date':
-                            currentDict['date'] = makeDate(matched.group('date').rstrip(':'))
-                        elif pname == 'host':
-                            currentDict[pname] = matched.group(pname).lower()
-                        else:
-                            currentDict[pname] = matched.group(pname)
-
+                        # Trim the line up to the ending space from the last match
                         line = line[matched.end('space'):]
 
                         # We matched this element so no need to keep looping on it
                         break
 
+                # None of the patterns matched for this field
                 if pname not in currentDict:
                     print "Did not match for %s: %s" % (pname, line)
 
             # Chop off any remaining crap
             line = line.rstrip()
 
+            # Finished parsing but did not consume the whole line (should never happen)
             if len(line) > 0:
                 print "still some line left: [%s]" % line
 
+            # Did not match anything at all?
             if currentDict == {}:
                 print "matched nothing: [%s]" % line
-
-            elif currentDict['text'].find('last message repeated') == 0:
                 continue
+
+            elif currentDict['text'].find('last message repeated') == 0 or currentDict['text'].find('RT_FLOW') == 0:
+                skip = 1
+                break
 
             else:
                 skip = 0
                 vendor = None
+                currentDict['fromhost'] = resolveHostname(src_ip)
+                currentDict['fromhost-ip'] = src_ip
+                if 'host' not in currentDict:
+                    currentDict['host'] = currentDict['fromhost'].lower()
+                else:
+                    currentDict['host'] = currentDict['host'].lower()
 
                 try:
                     if currentDict['host'].find('v-') == 0:
@@ -169,15 +170,15 @@ def generateDicts(sock):
 
                 if skip == 0:
                     yield(currentDict)
-                    currentDict = {}
 
 
-opts, args = getopt.getopt(sys.argv[1:], "jv")
+opts, args = getopt.getopt(sys.argv[1:], "jvr")
 
 matches = {}
 messages = []
 verbose = 0
 use_json = 0
+rsyslog_json = 0
 minute = datetime.utcnow().strftime("%M")
 
 # define mandatory fields here
@@ -185,25 +186,61 @@ baseDict = {
     "host": 'UNKNOWN',
     "facility": 'UNKNOWN',
     "severity": 'debug',
-    "msg_type": 'UNKNOWN',
+    "key": 'UNKNOWN',
     "message": 'UNKNOWN'
 }
 
+severityMap = {
+    "0": "emerg",
+    "1": "alert",
+    "2": "crit",
+    "3": "err",
+    "4": "warning",
+    "5": "notice",
+    "6": "info",
+    "7": "debug"
+}
+
+facilityMap = {
+    "0": "kernel",
+    "1": "user",
+    "2": "mail",
+    "3": "system",
+    "4": "auth",
+    "5": "syslog",
+    "6": "lpd",
+    "7": "news",
+    "8": "uucp",
+    "9": "time",
+    "10": "auth",
+    "11": "ftp",
+    "12": "ntp",
+    "13": "logaudit",
+    "14": "logalert",
+    "15": "clock",
+    "16": "local0",
+    "17": "local1",
+    "18": "local2",
+    "19": "local3",
+    "20": "local4",
+    "21": "local5",
+    "22": "local6",
+    "23": "local7"
+}
 
 for o, a in opts:
     if o == '-v':
         verbose = 1
     if o == '-j':
         use_json = 1
+    if o == '-r':
+        rsyslog_json = 1
 
 syslogTuple = ('', 514)
 syslogSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 syslogSocket.bind(syslogTuple)
 
 for msgDict in generateDicts(syslogSocket):
-    if msgDict['text'].find('RT_FLOW') != -1:
-        continue
-
     #print "log: %s" % msgDict
     messages.append(msgDict)
 
@@ -212,22 +249,32 @@ for msgDict in generateDicts(syslogSocket):
         if 'date' not in msgDict:
             jsonDict['@timestamp'] = makeDate('now')
         else:
-            jsonDict['@timestamp'] = msgDict['date']
+            jsonDict['@timestamp'] = makeDate(msgDict['date'].rstrip(':'))
 
-        jsonDict['host'] = msgDict['host'].lower()
+        jsonDict['host'] = msgDict['host']
         jsonDict['message'] = msgDict['text']
-        if 'id' in msgDict:
-            jsonDict['msg_type'] = msgDict['id']
+        if 'severity' in msgDict:
+            jsonDict['severity'] = severityMap[msgDict['severity']]
+            jsonDict['facility'] = facilityMap[msgDict['facility']]
+
+        if 'msg_type' in msgDict:
+            jsonDict['msg_type'] = msgDict['msg_type']
         else:
-            jsonDict['msg_type'] = msgDict['text'].partition(' ')[0]
+            jsonDict['msg_type'] = msgDict['text'].partition(' ')[0].partition('[')[0]
 
+        if 'id' in msgDict:
+            jsonDict['instance'] = msgDict['id'] + '_' + jsonDict['host']
+            if 'key_fields' in msgDict:
+                for f in msgDict['key_fields']:
+                    jsonDict['instance'] += '_' + msgDict[f]
+            jsonDict['key'] = jsonDict['instance'] + '_state:' + str(msgDict['state'])
+        else:
+            jsonDict['key'] = jsonDict['host'] + '_' + msgDict['text']
 
-        # mmjsonparse in rsyslog won't parse JSON correctly without
-        # the '@cee:@cee:' prefix
-        print "@cee:@cee:" + json.dumps(jsonDict)
-    else:
-        if verbose > 0:
-            print msgDict
+        print json.dumps(jsonDict)
+
+    if verbose > 0:
+        print msgDict
 
     if int(datetime.utcnow().strftime("%M")) != minute:
         minute = int(datetime.now().strftime("%M"))
