@@ -20,19 +20,18 @@ class Device(object):
 
             if matched:
                 pattern = self.logPatterns[p]
-                if pattern['state'] == 0:
-                    # Return instantly on ignored messages
-                    #print "discarding - matched pattern id %s with text: %s" % (pattern['id'], message['text'])
-                    message['state'] = 0
-                    return 1
-
                 if self.verbose is True:
                     print "matched pattern id %s with text: %s" % (pattern['id'], message['text'])
 
+                # Add the fields defined in the default pattern spec
                 for k in pattern:
                     message[k] = pattern[k]
 
-                # Matched, so stop
+                # Add any fields named in the regex for this pattern
+                for k in p.groupindex:
+                    message[k] = matched.group(k)
+
+                # Matched, so no need to keep looking
                 return 1
 
         return 0
@@ -89,7 +88,7 @@ class Device(object):
         pattern_dict['id'] = msg_id
         pattern_dict['state'] = msg_state
         pattern_dict['ttl'] = msg_ttl
-        pattern_dict['keys'] = msg_keys
+        pattern_dict['key_fields'] = msg_keys
 
         for cp in cpatterns:
             if cp in self.logPatterns:
@@ -113,17 +112,17 @@ class A10(Device):
         # msg_state = Type of message - 0=ignore, 1=up, 2=down, 3=stateless
         # msg_keys = List of tokens which make up the instance key
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?SLB server (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) ((TCP|UDP) )?port (?P<port>\d+) (of group (?P<group>\S+) )?is (down|disabled)', 100, 2, 0, ['group','instance','port'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?SLB server (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) ((TCP|UDP) )?port (?P<port>\d+) (of group (?P<group>\S+) )?is up', 101, 1, 0, ['group','instance','port'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?SLB server (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) is down', 102, 2, 0, ['instance'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?SLB server (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) is up', 103, 1, 0, ['instance'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>GSLB)\]<\d+> (partition-id<\d+> <\S+> )?GSLB Server - (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) changes state from Up to Down', 104, 2, 0, ['instance'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>GSLB)\]<\d+> (partition-id<\d+> <\S+> )?GSLB Server - (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) changes state from Down to Up', 105, 1, 0, ['instance'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>ACOS)\]<\d+> (partition-id<\d+> <\S+> )?Service (?P<service>\S+) on virtual [Ss]erver (?P<instance>\S+) port (?P<port>\d+) is down', 106, 2, 0, ['instance','service','port'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>ACOS)\]<\d+> (partition-id<\d+> <\S+> )?Service (?P<service>\S+) on virtual [Ss]erver (?P<instance>\S+) port (?P<port>\d+) is up', 107, 1, 0, ['instance','service','port'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>ACOS)\]<\d+> (partition-id<\d+> <\S+> )?Virtual server (?P<instance>\S+) is down', 108, 2, 0, ['instance'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>ACOS)\]<\d+> (partition-id<\d+> <\S+> )?Virtual server (?P<instance>\S+) is up', 109, 1, 0, ['instance'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?Service-group (?P<instance>\S+) is down', 110, 2, 0, ['instance'])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?Service-group (?P<instance>\S+) is up', 111, 1, 0, ['instance'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?SLB server (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) ((TCP|UDP) )?port (?P<port>\d+) (of group (?P<group>\S+) )?is up', 100, 1, 0, ['group','instance','port'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?SLB server (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) is down', 101, 2, 0, ['instance'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?SLB server (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) is up', 101, 1, 0, ['instance'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>GSLB)\]<\d+> (partition-id<\d+> <\S+> )?GSLB Server - (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) changes state from Up to \S+', 102, 2, 0, ['instance'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>GSLB)\]<\d+> (partition-id<\d+> <\S+> )?GSLB Server - (?P<instance>\S+) \(\d+\.\d+\.\d+\.\d+\) changes state from \S+ to Up', 102, 1, 0, ['instance'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>ACOS)\]<\d+> (partition-id<\d+> <\S+> )?Service (?P<service>\S+) on virtual [Ss]erver (?P<instance>\S+) port (?P<port>\d+) is down', 103, 2, 0, ['instance','service','port'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>ACOS)\]<\d+> (partition-id<\d+> <\S+> )?Service (?P<service>\S+) on virtual [Ss]erver (?P<instance>\S+) port (?P<port>\d+) is up', 103, 1, 0, ['instance','service','port'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>ACOS)\]<\d+> (partition-id<\d+> <\S+> )?Virtual server (?P<instance>\S+) is down', 104, 2, 0, ['instance'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>ACOS)\]<\d+> (partition-id<\d+> <\S+> )?Virtual server (?P<instance>\S+) is up', 104, 1, 0, ['instance'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?Service-group (?P<instance>\S+) is down', 105, 2, 0, ['instance'])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>HMON)\]<\d+> (partition-id<\d+> <\S+> )?Service-group (?P<instance>\S+) is up', 105, 1, 0, ['instance'])
 
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>MGMT)\]<\d+> Certificate file (?P<instance>\S+) (is going to|has) expired?', 204, 3, 0, ['instance'])
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>MGMT)\]<\d+> Certificate check failed\. Send Email failed', 205, 0, 600, [])
@@ -144,18 +143,21 @@ class A10(Device):
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>CLI)\]<\d+> FIPS mode has been set in rimacli', 304, 0, 600, [])
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>CLI)\]<\d+> handler signal \S+', 305, 0, 600, [])
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> Control CPU Usage is over threshold limit\(\d+\)', 306, 2, 600, [])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> Control CPU Usage is OK\.', 307, 1, 600, [])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> Control CPU Usage is OK\.', 306, 1, 600, [])
+
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> Error receiving TACACS\+ \S+ RESPONSE from server (?P<instance>\S+): ', 308, 0, 600, ['instance'])
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> Connection error with TACACS\+ server (?P<instance>\S+): ', 309, 0, 600, ['instance'])
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> Contact with tacplus server failed', 309, 0, 600, [])
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> tacplus authen (state:|msg=)', 310, 0, 600, [])
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> System Temperature \d+ is (over|under) threshold limit\(\d+\)', 311, 2, 600, [])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> System Temperature \d+ is OK\.', 312, 1, 600, [])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> System Temperature \d+ is OK\.', 311, 1, 600, [])
+
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> Running configuration successfully saved', 313, 0, 600, [])
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>SYSTEM)\]<\d+> User \"(?P<user>\S+)\" with session ID \d+ successfully saved the running configuration', 313, 0, 600, ['user'])
 
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>AXMON)\]<\d+> Enabled load-sharing on packets to data CPU \d+', 400, 2, 600, [])
-        self.addLogPattern(r'^a10logd: \[(?P<msg_type>AXMON)\]<\d+> Stopped load-sharing on packets to data CPU \d+', 401, 1, 600, [])
+        self.addLogPattern(r'^a10logd: \[(?P<msg_type>AXMON)\]<\d+> Stopped load-sharing on packets to data CPU \d+', 400, 1, 600, [])
+
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>VCS)\]<\d+> Established connection from vBlade (?P<instance>\S+):\d+', 402, 3, 600, ['instance'])
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>VCS)\]<\d+> (vBlade h|H)andshake completed( with vBlade (?P<instance>\S+):\d+)?', 403, 3, 600, ['instance'])
         self.addLogPattern(r'^a10logd: \[(?P<msg_type>VCS)\]<\d+> Handshake successful', 403, 3, 600, [])
@@ -199,7 +201,7 @@ class Arista(Device):
         self.addLogPattern(r'^IgmpSnooping: %(?P<msg_type>IGMPSNOOPING-6-NO_IGMP_QUERIER): No IGMP querier detected in VLAN (?P<vlan>\d+). IGMP report received from \S+ on (?P<port>\S+) for \S+', 300, 3, 0, ['vlan','port'])
 
         self.addLogPattern(r'^Ebra: %(?P<msg_type>LINEPROTO-5-UPDOWN): Line protocol on Interface (?P<port>\S+), changed state to down', 400, 2, 0, ['port'])
-        self.addLogPattern(r'^Ebra: %(?P<msg_type>LINEPROTO-5-UPDOWN): Line protocol on Interface (?P<port>\S+), changed state to up', 401, 1, 0, ['port'])
+        self.addLogPattern(r'^Ebra: %(?P<msg_type>LINEPROTO-5-UPDOWN): Line protocol on Interface (?P<port>\S+), changed state to up', 400, 1, 0, ['port'])
 
         self.addLogPattern(r'^(?P<msg_type>initblockdev): dosfsck on \S+ \S+ exited with \d+', 500, 0, 600, [])
         self.addLogPattern(r'^SuperServer: %(?P<msg_type>SYS-4-CLI_SCHEDULER_ABORT): Execution of scheduled CLI execution job \'\S+\' was aborted due to an error:', 501, 0, 600, [])
@@ -225,10 +227,10 @@ class Brocade(Device):
 
         self.addLogPattern(r'^INFO: port (?P<port>\S+) latched remote fault', 200, 0, 600, ['port'])
         self.addLogPattern(r'^System: Interface ethernet (?P<port>\S+), state down', 201, 2, 0, ['port'])
-        self.addLogPattern(r'^System: Interface ethernet (?P<port>\S+), state up', 202, 1, 0, ['port'])
-        self.addLogPattern(r'^System: Module (?P<instance>\S+) powered (off|on)', 203, 3, 0, ['instance'])
-        self.addLogPattern(r'^System: Set fan speed to .+', 204, 3, 600, [])
-        self.addLogPattern(r'^System: Stack unit \d+ Fan speed changed', 204, 3, 600, [])
+        self.addLogPattern(r'^System: Interface ethernet (?P<port>\S+), state up', 201, 1, 0, ['port'])
+        self.addLogPattern(r'^System: Module (?P<instance>\S+) powered (off|on)', 202, 3, 0, ['instance'])
+        self.addLogPattern(r'^System: Set fan speed to .+', 203, 3, 600, [])
+        self.addLogPattern(r'^System: Stack unit \d+ Fan speed changed', 203, 3, 600, [])
 
         self.addLogPattern(r'^RSTP: VLAN VLAN: (?P<vlan>\S+)  Port (?P<port>\S+) - STP State \S+', 200, 0, 600, ['vlan','port'])
 
@@ -277,8 +279,8 @@ class Force10(Device):
         self.addLogPattern(r'^([A-Z]{2}T: )?%[A-Z0-9_-]+: ?\d %KERN-2-INT: (?P<msg_type>_soc_xgs3_mem_dma): \S+ failed', 101, 0, 600, [])
 
         self.addLogPattern(r'^([A-Z]{2}T: )?%[A-Z0-9_-]+: ?\d %(?P<msg_type>IFMGR-5-OSTATE_DN): Changed interface state to down: (?P<port>.+)$', 200, 2, 0, ['port'])
-        self.addLogPattern(r'^([A-Z]{2}T: )?%[A-Z0-9_-]+: ?\d %(?P<msg_type>IFMGR-5-OSTATE_UP): Changed interface state to up: (?P<port>.+)$', 201, 1, 0, ['port'])
-        self.addLogPattern(r'^([A-Z]{2}T: )?%[A-Z0-9_-]+: ?\d %(?P<msg_type>ARPMGR-6-MAC_CHANGE): IP-4-ADDRMOVE: IP address (?P<instance>\S+) is moved', 202, 2, 0, ['instance'])
+        self.addLogPattern(r'^([A-Z]{2}T: )?%[A-Z0-9_-]+: ?\d %(?P<msg_type>IFMGR-5-OSTATE_UP): Changed interface state to up: (?P<port>.+)$', 200, 1, 0, ['port'])
+        self.addLogPattern(r'^([A-Z]{2}T: )?%[A-Z0-9_-]+: ?\d %(?P<msg_type>ARPMGR-6-MAC_CHANGE): IP-4-ADDRMOVE: IP address (?P<instance>\S+) is moved', 201, 3, 0, ['instance'])
 
         self.addLogPattern(r'^([A-Z]{2}T: )?%[A-Z0-9_-]+: ?\d %(?P<msg_type>CHMGR-2-FAN_SPEED_CHANGE): Fan speed changed to \d %', 300, 0, 600, [])
 
@@ -328,15 +330,16 @@ class Juniper(Device):
         self.addLogPattern(r'^/kernel: (?P<msg_type>MTU) for (?P<instance>\S+) (reduced|increased) ', 1006, 0, 600, ['instance'])
         self.addLogPattern(r'^/kernel: (?P<msg_type>iff_handle_ifa_delete): deletion of address on ', 1007, 0, 600, ['instance'])
         self.addLogPattern(r'^/kernel: : port status changed', 1008, 0, 600, [])
-        self.addLogPattern(r'^/kernel: (?P<msg_type>KERN_LACP_INTF_STATE_CHANGE): lacp_update_state_userspace: cifd (?P<port>\S+) - (?P<state>(CD|DETACHED|ATTACHED)) state - .+', 1009, 3, 0, ['port','state'])
+
         self.addLogPattern(r'^/kernel: (?P<msg_type>ae_bundlestate_ifd_change): bundle (?P<port>\S+): bundle IFD minimum bandwidth or minimum links not met, .+', 1010, 3, 0, ['port'])
         self.addLogPattern(r'^/kernel: (?P<msg_type>ae_linkstate_ifd_change): MDOWN received for interface (?P<port>\S+), member of (?P<instance>\S+)', 1011, 2, 0, ['port','instance'])
-        self.addLogPattern(r'^/kernel: (?P<msg_type>ae_linkstate_ifd_change): MUP received for interface (?P<port>\S+), member of (?P<instance>\S+)', 1012, 1, 0, ['port','instance'])
+        self.addLogPattern(r'^/kernel: (?P<msg_type>ae_linkstate_ifd_change): MUP received for interface (?P<port>\S+), member of (?P<instance>\S+)', 1011, 1, 0, ['port','instance'])
+
         self.addLogPattern(r'^/kernel: Percentage memory available\(\d+\)less than threshold\(\d+\s?%\)', 1013, 3, 0, [])
         self.addLogPattern(r'^/kernel: (?P<msg_type>jsr_prl_recv_ack_msg)\(\): received PRL ACK message on non-active socket', 1014, 3, 600, [])
         self.addLogPattern(r'^/kernel:  Filter idx: \d+ ifl index \d+ Interface  ?(?P<port>\S+)', 1015, 3, 600, ['port'])
         self.addLogPattern(r'^/kernel:  Packet in FW : [0-9a-f]+', 1016, 3, 600, ['port'])
-        self.addLogPattern(r'^/kernel: (?P<port>\S+): get tlv ppfeid \d+', 1017, 1, 0, ['port'])
+        self.addLogPattern(r'^/kernel: (?P<port>\S+): get tlv ppfeid \d+', 1017, 3, 0, ['port'])
         self.addLogPattern(r'^/kernel: (?P<msg_type>GENCFG): op \d+ \(.+\) failed; ', 1018, 3, 600, [])
         self.addLogPattern(r'^/kernel: (?P<process>exec_elf32_imgact): Running BTLB binary without the BTLB_FLAG env set', 1019, 0, 600, ['process'])
         self.addLogPattern(r'^/kernel: SMB read failed addr .+', 1020, 0, 600, [])
@@ -347,7 +350,9 @@ class Juniper(Device):
         self.addLogPattern(r'^/kernel: (?P<msg_type>KERN_ARP_DUPLICATE_ADDR): duplicate IP address \S+! sent from address: \S+', 1025, 3, 600, [])
         self.addLogPattern(r'^/kernel: Filter Already exist in hardware', 1026, 0, 600, [])
         self.addLogPattern(r'^init: (?P<msg_type>\S+) \(PID \d+\) exited', 1027, 2, 600, [])
-        self.addLogPattern(r'^init: (?P<msg_type>\S+) \(PID \d+\) started', 1028, 1, 600, [])
+        self.addLogPattern(r'^init: (?P<msg_type>\S+) \(PID \d+\) started', 1027, 1, 600, [])
+        self.addLogPattern(r'^/kernel: (?P<msg_type>KERN_LACP_INTF_STATE_CHANGE): lacp_update_state_userspace: cifd (?P<port>\S+) - (?P<portstate>(DETACHED|ATTACHED)) state - .+', 1028, 2, 0, ['port'])
+        self.addLogPattern(r'^/kernel: (?P<msg_type>KERN_LACP_INTF_STATE_CHANGE): lacp_update_state_userspace: cifd (?P<port>\S+) - (?P<portstate>CD state) - .+', 1028, 1, 0, ['port'])
 
         self.addLogPattern(r'^master failed to clean up hw entry', 1100, 0, 600, [])
         self.addLogPattern(r'^(?P<msg_type>dfwc|cosd)(\[\d{1,5}\])?: waiting for lock, Process', 1101, 0, 600, [])
@@ -366,14 +371,15 @@ class Juniper(Device):
         self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_AUTH_EVENT): Authenticated user \'(?P<user>\S+)\' at ', 3004, 2, 600, ['user'])
         self.addLogPattern(r'^sshd\[\d{1,5}\]: Accepted \S+ for (?P<user>\S+) from ', 3004, 2, 600, ['user'])
         self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_LOGIN_EVENT): User \'(?P<user>[^\']+)\' login, class ', 3004, 2, 600, ['user'])
-        self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_LOGOUT_EVENT): User \'(?P<user>[^\']+)\' logout', 3006, 1, 600, ['user'])
+        self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_LOGOUT_EVENT): User \'(?P<user>[^\']+)\' logout', 3004, 1, 600, ['user'])
         self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_JUNOSCRIPT_CMD): User \'(?P<user>[^\']+)\' used JUNOScript client to run command \'(?P<command>[^\']+)', 3006, 3, 600, ['user','command'])
         self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_NETCONF_CMD): User \'(?P<user>[^\']+)\' used NETCONF client to run command \'(?P<command>[^\']+)', 3007, 3, 600, ['user','command'])
         self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_DBASE_LOGIN_EVENT): User \'(?P<user>[^\']+)\' entering configuration mode', 3008, 2, 600, ['user'])
-        self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_DBASE_LOGOUT_EVENT): User \'(?P<user>[^\']+)\' exiting configuration mode', 3009, 1, 600, ['user'])
+        self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_DBASE_LOGOUT_EVENT): User \'(?P<user>[^\']+)\' exiting configuration mode', 3008, 1, 600, ['user'])
         self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_COMMIT): User \'(?P<user>[^\']+)\' requested \'commit\' operation', 3010, 2, 0, ['user'])
+        self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_COMMIT_COMPLETED): commit complete', 3010, 1, 0, [])
         self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_COMMIT_PROGRESS): Commit operation in progress: ', 3011, 3, 600, ['user'])
-        self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_COMMIT_COMPLETED): commit complete', 3012, 1, 0, [])
+
         self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_COMMIT_CONFIRMED_REMINDER): \'commit confirmed\' must be confirmed', 3013, 0, 600, [])
         self.addLogPattern(r'^(?P<msg_type>UI_CLI_IDLE_TIMEOUT): Idle timeout for user \'(?P<user>[^\']+)\' exceeded and session terminated', 3014, 0, 600, ['user'])
         self.addLogPattern(r'^(mgd|file)\[\d{1,5}\]: (?P<msg_type>UI_CFG_AUDIT)_(NEW|SET|OTHER): User \'(?P<user>[^\']+)\' (activate|deactivate|set|update|delete|rename|override|rollback)', 3015, 3, 600, ['user'])
@@ -410,17 +416,17 @@ class Juniper(Device):
         self.addLogPattern(r'^sshd\[\d{1,5}\]: Postponed \S+ for \S+ from (?P<host>\S+)', 3069, 0, 600, ['host'])
 
         self.addLogPattern(r'^jddosd\[\d{1,5}\]: (?P<msg_type>DDOS_PROTOCOL_VIOLATION_SET): Protocol (?P<protocol>.+) is violated at (?P<instance>fpc \d+) for \d+ times', 3067, 2, 0, ['protocol','instance'])
-        self.addLogPattern(r'^jddosd\[\d{1,5}\]: (?P<msg_type>DDOS_PROTOCOL_VIOLATION_CLEAR): Protocol (?P<protocol>.+) has returned to normal. Violated at (?P<instance>fpc \d+) for \d+ times', 3068, 1, 0, ['protocol','instance'])
-        self.addLogPattern(r'^bfdd\[\d{1,5}\]: (?P<msg_type>BFDD_TRAP_SHOP_STATE)_DOWN: local discriminator: \d+, new state: down, interface: (?P<port>\S+), peer addr: (?P<peer_ip>\S+)', 3069, 2, 0, ['port','peer_ip'])
-        self.addLogPattern(r'^bfdd\[\d{1,5}\]: (?P<msg_type>BFDD_TRAP_SHOP_STATE)_UP: local discriminator: \d+, new state: up, interface: (?P<port>\S+), peer addr: (?P<peer_ip>\S+)', 3070, 1, 0, ['port','peer_ip'])
-        self.addLogPattern(r'^bfdd\[\d{1,5}\]: (?P<msg_type>BFD Session) (?P<peer_ip>\S+) \(IFL \d+\) state Up -> \S+ LD/RD\(\d+/\d+\)', 3071, 2, 0, ['peer_ip'])
-        self.addLogPattern(r'^bfdd\[\d{1,5}\]: (?P<msg_type>BFD Session) (?P<peer_ip>\S+) \(IFL \d+\) state \S+ -> Up LD/RD\(\d+/\d+\)', 3072, 1, 0, ['peer_ip'])
-        self.addLogPattern(r'^dcd\[\d{1,5}\]: (?P<msg_type>parse_mix_rate_parent_ae) : ifd (?P<instance>\S+) no configured link-speed', 3073, 1, 0, ['instance'])
-        self.addLogPattern(r'^/usr/sbin/sampled\[\d{1,5}\]: (?P<process>sampled_read_config): trace_file is 0x[0-9a-f]+, parse_only is \d', 3074, 1, 0, ['process'])
-        self.addLogPattern(r'ffp\[\d{1,5}\]: \"dynamic-profiles\": No change to profiles', 3075, 1, 0, [])
-        self.addLogPattern(r'^/usr/sbin/sampled\[\d{1,5}\]: (?P<process>sighup_event): trace_file is 0x[0-9a-f]+', 3076, 1, 0, ['process'])
-        self.addLogPattern(r'^xntpd(\[\d{1,5}\])?: kernel time sync enabled \d+', 3080, 1, 600, [])
-        self.addLogPattern(r'^xntpd(\[\d{1,5}\])?: kernel time sync status \d+', 3080, 1, 600, [])
+        self.addLogPattern(r'^jddosd\[\d{1,5}\]: (?P<msg_type>DDOS_PROTOCOL_VIOLATION_CLEAR): Protocol (?P<protocol>.+) has returned to normal. Violated at (?P<instance>fpc \d+) for \d+ times', 3067, 1, 0, ['protocol','instance'])
+        self.addLogPattern(r'^bfdd\[\d{1,5}\]: (?P<msg_type>BFDD_TRAP_SHOP_STATE)_DOWN: local discriminator: \d+, new state: down, interface: (?P<port>\S+), peer addr: (?P<peer_ip>\S+)', 3068, 2, 0, ['port','peer_ip'])
+        self.addLogPattern(r'^bfdd\[\d{1,5}\]: (?P<msg_type>BFDD_TRAP_SHOP_STATE)_UP: local discriminator: \d+, new state: up, interface: (?P<port>\S+), peer addr: (?P<peer_ip>\S+)', 3068, 1, 0, ['port','peer_ip'])
+        self.addLogPattern(r'^bfdd\[\d{1,5}\]: (?P<msg_type>BFD Session) (?P<peer_ip>\S+) \(IFL \d+\) state Up -> \S+ LD/RD\(\d+/\d+\)', 3069, 2, 0, ['peer_ip'])
+        self.addLogPattern(r'^bfdd\[\d{1,5}\]: (?P<msg_type>BFD Session) (?P<peer_ip>\S+) \(IFL \d+\) state \S+ -> Up LD/RD\(\d+/\d+\)', 3069, 1, 0, ['peer_ip'])
+        self.addLogPattern(r'^dcd\[\d{1,5}\]: (?P<msg_type>parse_mix_rate_parent_ae) : ifd (?P<instance>\S+) no configured link-speed', 3070, 3, 0, ['instance'])
+        self.addLogPattern(r'^/usr/sbin/sampled\[\d{1,5}\]: (?P<process>sampled_read_config): trace_file is 0x[0-9a-f]+, parse_only is \d', 3071, 3, 0, ['process'])
+        self.addLogPattern(r'ffp\[\d{1,5}\]: \"dynamic-profiles\": No change to profiles', 3075, 3, 0, [])
+        self.addLogPattern(r'^/usr/sbin/sampled\[\d{1,5}\]: (?P<process>sighup_event): trace_file is 0x[0-9a-f]+', 3076, 3, 0, ['process'])
+        self.addLogPattern(r'^xntpd(\[\d{1,5}\])?: kernel time sync enabled \d+', 3080, 3, 600, [])
+        self.addLogPattern(r'^xntpd(\[\d{1,5}\])?: kernel time sync status \d+', 3080, 3, 600, [])
         self.addLogPattern(r'^xntpd(\[\d{1,5}\])?: ntpd \d+\.\d+\.\d+', 3081, 0, 600, [])
         self.addLogPattern(r'^xntpd(\[\d{1,5}\])?: precision = \d+\.\d+ usec', 3082, 0, 600, [])
         self.addLogPattern(r'^xntpd(\[\d{1,5}\])?: Listening on interface \S+', 3083, 0, 600, [])
@@ -439,8 +445,9 @@ class Juniper(Device):
         self.addLogPattern(r'^snmpd\[\d{1,5}\]: (?P<msg_type>SNMPD_TRAP_QUEUE_MAX_ATTEMPTS): trap_dq_send_traps: after \d+ attempts, deleting \d+ traps queued to (?P<instance>\S+)', 3102, 3, 0, ['instance'])
         self.addLogPattern(r'^snmpd\[\d{1,5}\]: (?P<msg_type>SNMPD_AUTH_FAILURE): nsa_(log_community|initial_embedcomm): unauthorized SNMP community from (?P<instance>\S+)', 3103, 3, 0, ['instance'])
         self.addLogPattern(r'^snmpd\[\d{1,5}\]: (?P<msg_type>SNMPD_AUTH_RESTRICTED_ADDRESS): nsa_initial_callback: request from address (?P<instance>\S+) not allowed', 3103, 3, 0, ['instance'])
+        self.addLogPattern(r'^mib2d\[\d{1,5}\]: (?P<msg_type>SNMP_TRAP_LINK_DOWN): ifIndex (?P<ifindex>\d+), ifAdminStatus \S+, ifOperStatus down\(2\), ifName (?P<port>\S+)', 3104, 2, 0, ['ifindex','port'])
         self.addLogPattern(r'^mib2d\[\d{1,5}\]: (?P<msg_type>SNMP_TRAP_LINK_UP): ifIndex (?P<ifindex>\d+), ifAdminStatus \S+, ifOperStatus up\(1\), ifName (?P<port>\S+)', 3104, 1, 0, ['ifindex','port'])
-        self.addLogPattern(r'^mib2d\[\d{1,5}\]: (?P<msg_type>SNMP_TRAP_LINK_DOWN): ifIndex (?P<ifindex>\d+), ifAdminStatus \S+, ifOperStatus down\(2\), ifName (?P<port>\S+)', 3105, 2, 0, ['ifindex','port'])
+
         self.addLogPattern(r'^snmpd\[\d{1,5}\]: (?P<msg_type>LIBJSNMP_NS_LOG_WARNING): WARNING: AgentX session, \S+, noticed request timeout', 3106, 3, 0, [])
         self.addLogPattern(r'^mib2d\[\d{1,5}\]: (?P<msg_type>LIBJSNMP_NS_LOG_INFO): INFO: ns_subagent_open_session: NET-SNMP version \S+ AgentX subagent connected', 3107, 3, 600, [])
         self.addLogPattern(r'^mib2d\[\d{1,5}\]: (?P<msg_type>LIBJSNMP_NS_LOG_ERR): ERR: snmpd: send_trap: Failure in sendto', 3108, 3, 600, [])
@@ -455,9 +462,11 @@ class Juniper(Device):
         self.addLogPattern(r'^(?P<msg_type>l2cpd)\[\d{1,5}\]: INFRA init done so returning', 3206, 0, 600, [])
         self.addLogPattern(r'^(?P<msg_type>l2cpd)\[\d{1,5}\]: task_reconfigure reinitializing done', 3207, 0, 600, ['process'])
         self.addLogPattern(r'^l2cpd\[\d{1,5}\]: (?P<msg_type>LLDP_NEIGHBOR_DOWN): A neighbor of interface (?P<port>\S+) has gone down\.', 3208, 2, 600, ['port'])
-        self.addLogPattern(r'^l2cpd\[\d{1,5}\]: (?P<msg_type>LLDP_NEIGHBOR_UP): A neighbor has come up for interface (?P<port>\S+)\.', 3209, 1, 600, ['port'])
+        self.addLogPattern(r'^l2cpd\[\d{1,5}\]: (?P<msg_type>LLDP_NEIGHBOR_UP): A neighbor has come up for interface (?P<port>\S+)\.', 3208, 1, 600, ['port'])
+
         self.addLogPattern(r'^(?P<msg_type>chassisd)\[\d{1,5}\]: (?P<process>CHASSISD_BLOWERS_SPEED)_FULL: Fans and impellers being set to full speed', 3210, 2, 600, ['process'])
-        self.addLogPattern(r'^(?P<msg_type>chassisd)\[\d{1,5}\]: (?P<process>CHASSISD_BLOWERS_SPEED)(_MEDIUM)?: Fans and impellers (are now running at normal|being set to intermediate) speed', 3211, 1, 600, ['process'])
+        self.addLogPattern(r'^(?P<msg_type>chassisd)\[\d{1,5}\]: (?P<process>CHASSISD_BLOWERS_SPEED)(_MEDIUM)?: Fans and impellers (are now running at normal|being set to intermediate) speed', 3210, 1, 600, ['process'])
+
         self.addLogPattern(r'^(?P<msg_type>chassisd)\[\d{1,5}\]: (?P<process>fpc_pic_process_pic_power_off_config):\d+ :No FPC in slot (?P<instance>\d+), skipping', 3212, 3, 600, ['process','instance'])
         self.addLogPattern(r'^(?P<msg_type>chassisd)\[\d{1,5}\]: (?P<process>CHASSISD_PARSE_COMPLETE): Using new configuration', 3213, 3, 600, ['process'])
         self.addLogPattern(r'^\S+: invoke-commands: Executed \S+, output to \S+ in text format', 3214, 0, 600, [])
@@ -471,20 +480,18 @@ class Juniper(Device):
 
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_MPLS_PATH_BANDWIDTH_CHANGE): MPLS path\s+\(lsp (?P<instance>\S+)\) bandwidth changed, path bandwidth \d+ bps', 4000, 0, 0, ['instance'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_MPLS_PATH_DOWN): MPLS path\s+down on LSP (?P<instance>\S+)', 4001, 2, 0, ['instance'])
-        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_MPLS_PATH_UP): MPLS path\s+up on LSP (?P<instance>\S+) path bandwidth \d+ bps', 4002, 1, 0, ['instance'])
+        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_MPLS_PATH_UP): MPLS path\s+up on LSP (?P<instance>\S+) path bandwidth \d+ bps', 4001, 1, 0, ['instance'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_MPLS_LSP_BANDWIDTH_CHANGE): MPLS LSP (?P<instance>\S+) bandwidth changed, lsp bandwidth \d+ bps', 4100, 0, 0, ['instance'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_MPLS_LSP_DOWN): MPLS LSP (?P<instance>\S+) down on (?P<path>\S+)', 4101, 2, 0, ['instance'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_MPLS_LSP_UP): MPLS LSP (?P<instance>\S+) up on (?P<path>\S+) Route ', 4102, 1, 0, ['instance'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_MPLS_LSP_CHANGE): MPLS LSP (?P<instance>\S+) change on (?P<path>\S+) Route ', 4103, 3, 0, ['instance'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_RSVP_INCORRECT_FLOWSPEC): Bandwidth in PATH Tspec greater than RESV flowspec for Session: (?P<instance>.+\) Proto \d+) Sender: ', 4104, 3, 0, ['instance'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_LDP_NBRDOWN): LDP neighbor (?P<instance>\S+) \((?P<port>\S+)\) is down', 4105, 2, 0, ['instance','port'])
-        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_LDP_NBRUP): LDP neighbor (?P<instance>\S+) \((?P<port>\S+)\) is up', 4106, 1, 0, ['instance','port'])
-        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_OSPF_NBRDOWN): OSPF neighbor (?P<instance>\S+) \(realm ospf-v2 (?P<port>\S+) area \d+\.\d+\.\d+\.\d+\) state changed from (Full|2Way) to [^(Full|2Way)]+', 4107, 2, 0, ['instance','port'])
-        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_OSPF_NBRUP): OSPF neighbor (?P<instance>\S+) \(realm ospf-v2 (?P<port>\S+) area \d+\.\d+\.\d+\.\d+\) state changed from \S+ to (Full|2Way)', 4108, 1, 0, ['instance','port'])
-        # This is pretty much a down message because it's indicating a state transition but not to full or 2way
-        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_OSPF_NBR(UP|DOWN)): OSPF neighbor (?P<instance>\S+) \(realm ospf-v2 (?P<port>\S+) area \d+\.\d+\.\d+\.\d+\) state changed from [^(Full|2Way)]+ to [^(Full|2Way)]+', 4109, 0, 600, ['instance','port'])
-        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_RSVP_NBRDOWN): RSVP neighbor (?P<instance>\S+) down on interface (?P<port>\S+) nbr-type \S+', 4110, 2, 0, ['instance','port'])
-        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_RSVP_NBRUP): RSVP neighbor (?P<instance>\S+) up on interface (?P<port>\S+) nbr-type \S+', 4111, 1, 0, ['instance','port'])
+        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_LDP_NBRUP): LDP neighbor (?P<instance>\S+) \((?P<port>\S+)\) is up', 4105, 1, 0, ['instance','port'])
+        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_OSPF_NBR(UP|DOWN)): OSPF neighbor (?P<instance>\S+) \(realm ospf-v2 (?P<port>\S+) area \d+\.\d+\.\d+\.\d+\) state changed from \S+ to [^(Full|2Way)]+', 4106, 2, 600, ['instance','port'])
+        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_OSPF_NBR(UP|DOWN)): OSPF neighbor (?P<instance>\S+) \(realm ospf-v2 (?P<port>\S+) area \d+\.\d+\.\d+\.\d+\) state changed from \S+ to (Full|2Way)', 4106, 1, 600, ['instance','port'])
+        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_RSVP_NBRDOWN): RSVP neighbor (?P<instance>\S+) down on interface (?P<port>\S+) nbr-type \S+', 4107, 2, 0, ['instance','port'])
+        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_RSVP_NBRUP): RSVP neighbor (?P<instance>\S+) up on interface (?P<port>\S+) nbr-type \S+', 4107, 1, 0, ['instance','port'])
 
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_RT_PATH_LIMIT_REACHED): Number of paths \(\d+\) in table (?P<instance>\S+) still exceeds or equals configured maximum', 4150, 3, 0, ['instance'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>KRT ADD) for (?P<instance>\S+) => \{ \} failed', 4151, 3, 600, ['instance'])
@@ -507,8 +514,9 @@ class Juniper(Device):
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>trace_(on|rotate)): (tracing|rotating)', 4207, 0, 0, [])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: ((?P<msg_type>BGP_WRITE_WOULD_BLOCK): )?bgp_send: sending \d+ bytes to (?P<peer_ip>\S+) \((Ex|In)ternal AS (?P<peer_asn>[\d\.]{1,11})\) blocked', 4208, 3, 600, ['peer_ip','peer_asn'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>BGP_WRITE_FAILED): bgp_send: sending \d+ bytes to (?P<peer_ip>\S+) \((Ex|In)ternal AS (?P<peer_asn>[\d\.]{1,11})\) failed', 4209, 3, 0, ['peer_ip','peer_asn'])
-        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_BGP_NEIGHBOR_STATE_CHANGED): BGP peer (?P<peer_ip>\S+) \((Ex|In)ternal AS (?P<peer_asn>[\d\.]{1,11})\) changed state from Established to (?P<peer_state>\S+)', 4210, 2, 0, ['peer_ip','peer_asn', 'peer_state'])
-        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_BGP_NEIGHBOR_STATE_CHANGED): BGP peer (?P<peer_ip>\S+) \((Ex|In)ternal AS (?P<peer_asn>[\d\.]{1,11})\) changed state from \S+ to (?P<peer_state>Established)', 4211, 1, 0, ['peer_ip','peer_asn', 'peer_state'])
+        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_BGP_NEIGHBOR_STATE_CHANGED): BGP peer (?P<peer_ip>\S+) \((Ex|In)ternal AS (?P<peer_asn>[\d\.]{1,11})\) changed state from Established to (?P<peer_state>\S+)', 4210, 2, 0, ['peer_ip','peer_asn'])
+        self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>RPD_BGP_NEIGHBOR_STATE_CHANGED): BGP peer (?P<peer_ip>\S+) \((Ex|In)ternal AS (?P<peer_asn>[\d\.]{1,11})\) changed state from \S+ to (?P<peer_state>Established)', 4210, 1, 0, ['peer_ip','peer_asn'])
+
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>BGP_RESET_PENDING_CONNECTION): (?P<peer_ip>\S+) \((Ex|In)ternal AS (?P<peer_asn>[\d\.]{1,11})\): reseting pending active connection', 4212, 3, 600, ['peer_ip','peer_asn'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>BGP_PREFIX_THRESH_EXCEEDED): (?P<peer_ip>\S+) \((Ex|In)ternal AS (?P<peer_asn>[\d\.]{1,11})\): Configured maximum prefix-limit threshold\(\d+\) exceeded', 4213, 3, 600, ['peer_ip','peer_asn'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>task_process_events): no write/connect method for BGP(_\d+)?_(?P<peer_asn>\d+)(_|\.)(?P<peer_ip>(\d+\.\d+\.\d+\.\d+|[0-9a-f:]+))\+\d+ socket', 4214, 3, 0, ['peer_ip','peer_asn'])
@@ -521,7 +529,8 @@ class Juniper(Device):
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>L2VPN) acquiring mastership for primary', 4252, 3, 600, [])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: (?P<msg_type>task_reconfigure) reinitializing done', 4253, 3, 600, [])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: EVENT <?(MTU)? ?(Delete|Add|Instance)? ?(Flags|SNMP Index)? ?(Bandwidth)? ?(?P<msg_type>UpDown)?>? (?P<port>\S+) index \d+( (\d+\.\d+\.\d+\.\d+|[0-9a-f:]+)(/\d+)? -> (zero-len|null|\d+\.\d+\.\d+\.\d+))? <Up( Broadcast)?( PointToPoint)?( Multicast)?( Localup)?>', 4254, 2, 0, ['port'])
-        self.addLogPattern(r'^rpd\[\d{1,5}\]: EVENT <?(MTU)? ?(Delete|Add|Instance)? ?(Flags|SNMP Index)? ?(Bandwidth)? ?(?P<msg_type>UpDown)?>? (?P<port>\S+) index \d+( (\d+\.\d+\.\d+\.\d+|[0-9a-f:]+)(/\d+)? -> (zero-len|null|\d+\.\d+\.\d+\.\d+))? <(Broadcast)?( PointToPoint)?( Multicast)?( Localup)?>', 4255, 1, 0, ['port'])
+        self.addLogPattern(r'^rpd\[\d{1,5}\]: EVENT <?(MTU)? ?(Delete|Add|Instance)? ?(Flags|SNMP Index)? ?(Bandwidth)? ?(?P<msg_type>UpDown)?>? (?P<port>\S+) index \d+( (\d+\.\d+\.\d+\.\d+|[0-9a-f:]+)(/\d+)? -> (zero-len|null|\d+\.\d+\.\d+\.\d+))? <(Broadcast)?( PointToPoint)?( Multicast)?( Localup)?>', 4254, 1, 0, ['port'])
+
         self.addLogPattern(r'^rpd\[\d{1,5}\]: EVENT <?(?P<msg_type>Bandwidth)?>? (?P<port>\S+) index \d+( (\d+\.\d+\.\d+\.\d+|[0-9a-f:]+)/\d+ -> (zero-len|null))? <(Up )?(Broadcast)?( PointToPoint)?( Multicast)?( Localup)?>', 4256, 3, 0, ['port'])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: \*STP Change\*, notify to other modules', 4257, 0, 600, [])
         self.addLogPattern(r'^rpd\[\d{1,5}\]: STP handler: (Stp index=\d+|IFD =\S+), op=\S+, state=(Disc|Forw)arding', 4258, 3, 600, [])
@@ -533,21 +542,22 @@ class Juniper(Device):
         self.addLogPattern(r'^rpd\[\d{1,5}\]: task state:  <.+>', 4264, 0, 600, [])
 
         self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP laser) bias current low  (warning|alarm) set', 4300, 2, 0, ['instance'])
-        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP laser) bias current low  (warning|alarm) cleared', 4301, 1, 0, ['instance'])
-        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\)\(\d+\)): (?P<msg_type>SFP\+?) unplugged', 4302, 2, 0, ['instance'])
-        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\)\(\d+\)): (?P<msg_type>SFP\+?) plugged in', 4303, 1, 0, ['instance'])
-        self.addLogPattern(r'^\S+ (?P<msg_type>SFP\+?) removed from port (?P<port>\S+)', 4302, 2, 0, ['port'])
-        self.addLogPattern(r'^\S+ (?P<msg_type>SFP\+?) found on port (?P<port>\S+)', 4303, 1, 0, ['port'])
+        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP laser) bias current low  (warning|alarm) cleared', 4300, 1, 0, ['instance'])
+        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\)\(\d+\)): (?P<msg_type>SFP\+?) unplugged', 4301, 2, 0, ['instance'])
+        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\)\(\d+\)): (?P<msg_type>SFP\+?) plugged in', 4301, 1, 0, ['instance'])
+        self.addLogPattern(r'^\S+ (?P<msg_type>SFP\+?) removed from port (?P<port>\S+)', 4302, 3, 0, ['port'])
+        self.addLogPattern(r'^\S+ (?P<msg_type>SFP\+?) found on port (?P<port>\S+)', 4303, 3, 0, ['port'])
         self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP (output|receive) power) low  (warning|alarm) set', 4304, 2, 0, ['instance'])
-        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP (output|receive) power) low  (warning|alarm) cleared', 4305, 1, 0, ['instance'])
-        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP syslog throttling): disabling syslogs for ', 4306, 2, 600, ['instance'])
-        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP syslog throttling): enabling syslogs for ', 4307, 1, 600, ['instance'])
-        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP voltage (high|low)) ? alarm set', 4308, 2, 0, ['instance'])
-        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP voltage (high|low)) ? alarm cleared', 4309, 1, 0, ['instance'])
-        self.addLogPattern(r'^(?P<instance>fpc\d+) XMCHIP\(\d+\): XXLCE\d+: Port Alarms: Detected Ethernet MAC Local Fault Delta Event for Port \d+ \((?P<port>\S+)\)', 4310, 2, 0, ['instance','port'])
-        self.addLogPattern(r'^(?P<instance>fpc\d+) XMCHIP\(\d+\): XXLCE\d+: Port Alarms: Cleared Ethernet MAC Local Fault Delta Event for Port \d+ \((?P<port>\S+)\)', 4311, 1, 0, ['instance','port'])
-        self.addLogPattern(r'^(?P<instance>fpc\d+) XMCHIP\(\d+\): XXLCE\d+: Port Alarms: Detected Ethernet MAC Remote Fault Delta Event for Port \d+ \((?P<port>\S+)\)', 4312, 2, 0, ['instance','port'])
-        self.addLogPattern(r'^(?P<instance>fpc\d+) XMCHIP\(\d+\): XXLCE\d+: Port Alarms: Cleared Ethernet MAC Remote Fault Delta Event for Port \d+ \((?P<port>\S+)\)', 4313, 1, 0, ['instance','port'])
+        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP (output|receive) power) low  (warning|alarm) cleared', 4304, 1, 0, ['instance'])
+        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP syslog throttling): disabling syslogs for ', 4305, 2, 600, ['instance'])
+        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP syslog throttling): enabling syslogs for ', 4305, 1, 600, ['instance'])
+        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP voltage (high|low)) ? alarm set', 4306, 2, 0, ['instance'])
+        self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\) link \d+) (?P<msg_type>SFP voltage (high|low)) ? alarm cleared', 4306, 1, 0, ['instance'])
+        self.addLogPattern(r'^(?P<instance>fpc\d+) XMCHIP\(\d+\): XXLCE\d+: Port Alarms: Detected Ethernet MAC Local Fault Delta Event for Port \d+ \((?P<port>\S+)\)', 4307, 2, 0, ['instance','port'])
+        self.addLogPattern(r'^(?P<instance>fpc\d+) XMCHIP\(\d+\): XXLCE\d+: Port Alarms: Cleared Ethernet MAC Local Fault Delta Event for Port \d+ \((?P<port>\S+)\)', 4307, 1, 0, ['instance','port'])
+        self.addLogPattern(r'^(?P<instance>fpc\d+) XMCHIP\(\d+\): XXLCE\d+: Port Alarms: Detected Ethernet MAC Remote Fault Delta Event for Port \d+ \((?P<port>\S+)\)', 4308, 2, 0, ['instance','port'])
+        self.addLogPattern(r'^(?P<instance>fpc\d+) XMCHIP\(\d+\): XXLCE\d+: Port Alarms: Cleared Ethernet MAC Remote Fault Delta Event for Port \d+ \((?P<port>\S+)\)', 4308, 1, 0, ['instance','port'])
+
         self.addLogPattern(r'^(?P<instance>\S+ JBCM\(\d+/\d+\)):(?P<msg_type>jbcm_sfp_eeprom_read): read sfp eeprom of \S+ failed', 4314, 0, 600, ['instance'])
         self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\)\(\d+\)), (?P<msg_type>SFP\+?) \d+: not Juniper supported', 4315, 0, 600, ['instance'])
         self.addLogPattern(r'^(?P<instance>(fpc\d+ C?MIC|\S+ JBCM)\(\d+/\d+\)) (?P<msg_type>SFP\+?) PHY \d+ is de-allocated', 4316, 0, 600, ['instance'])
@@ -555,7 +565,7 @@ class Juniper(Device):
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>cmic_vsc8248_set_app_mode): error setting app mode for CMIC', 4318, 0, 600, ['instance'])
         self.addLogPattern(r'^(?P<instance>fpc\d+ CMIC\(\d+/\d+\)\(\d+\)): (?P<msg_type>error) setting', 4319, 0, 600, ['instance'])
 
-        self.addLogPattern(r'^(?P<instance>\S+) Next-hop resolution requests from interface (?P<port>\d+) throttled ', 4400, 1, 600, ['instance','port'])
+        self.addLogPattern(r'^(?P<instance>\S+) Next-hop resolution requests from interface (?P<port>\d+) throttled ', 4400, 3, 600, ['instance','port'])
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>pic_xmchip_wanio_dfe_tuning_op):(?P<port>\S+) - (En|Dis)able DFE (adaptive )?tuning ', 4401, 3, 600, ['instance','port'])
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>cmic_phy_dfe_tuning_state): ?(?P<port>\S+) - DFE coarse/fine tuning completes', 4402, 3, 600, ['instance','port'])
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>PFE_FW_SYSLOG_IP6)_(GEN|ICMP|TCP_UDP): FW: (?P<port>\S+)\s+D \S+ SA \S+', 4403, 3, 600, ['instance','port'])
@@ -567,18 +577,21 @@ class Juniper(Device):
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>mic_i2c_reg_get) - ', 4409, 3, 0, [])
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>mic_sfp_phy_read):MIC\(\d+/\d+\) - ', 4409, 3, 0, [])
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>mic_sfp_phy_mdio_sgmii_lnk_op): ', 4409, 3, 0, [])
+        self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>ifp) (?P<port>\S+) ifd_mdown', 4410, 2, 0, ['port'])
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>mic_mac_periodic):(?P<port>\S+): ifd_mup', 4410, 1, 0, ['port'])
-        self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>ifp) (?P<port>\S+) ifd_mdown', 4411, 2, 0, ['port'])
+
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>MQchip) \d+ XE \d+ Throttle: ', 4412, 3, 0, ['instance'])
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>LBCM-L2,pfe_bcm_l2_mac_add\(\)),\d+:', 4413, 3, 0, ['instance'])
         self.addLogPattern(r'^(?P<instance>fpc\d+) (?P<msg_type>cmic_optic_check_non_nebs_all): CMIC\(\d+/\d+\) link \d+', 4414, 3, 0, ['instance'])
 
 
+        self.addLogPattern(r'^\W*last message repeated', 4440, 0, 0, [])
+
         self.addLogPattern(r'^\(FPC Slot \d+, PIC Slot \d+\) (?P<instance>SPC\d+_PIC\d+) last message repeated \d+ times', 4450, 0, 600, ['instance'])
         self.addLogPattern(r'^(?P<instance>\S+) utm_usp_ipc_lic_handler: license state\(\d+\) set', 4451, 0, 600, ['instance'])
-        self.addLogPattern(r'^(\(FPC Slot \d+, PIC Slot \d+\) SPC\d+_PIC\d+ )?kmd\[\d{1,5}\]: (?P<msg_type>KMD_PM_SA_ESTABLISHED): Local gateway: \S+, Remote gateway: (?P<instance>\S+),', 4452, 1, 600, ['instance'])
+        self.addLogPattern(r'^(\(FPC Slot \d+, PIC Slot \d+\) SPC\d+_PIC\d+ )?kmd\[\d{1,5}\]: (?P<msg_type>KMD_PM_SA_ESTABLISHED): Local gateway: \S+, Remote gateway: (?P<instance>\S+),', 4452, 3, 600, ['instance'])
+        self.addLogPattern(r'^(\(FPC Slot \d+, PIC Slot \d+\) SPC\d+_PIC\d+ )?kmd\[\d{1,5}\]: (?P<msg_type>KMD_VPN_DOWN_ALARM_USER): VPN (?P<instance>\S+) from \d+\.\d+\.\d+\.\d+ is down\.', 4453, 2, 600, ['instance'])
         self.addLogPattern(r'^(\(FPC Slot \d+, PIC Slot \d+\) SPC\d+_PIC\d+ )?kmd\[\d{1,5}\]: (?P<msg_type>KMD_VPN_UP_ALARM_USER): VPN (?P<instance>\S+) from \d+\.\d+\.\d+\.\d+ is up\.', 4453, 1, 600, ['instance'])
-        self.addLogPattern(r'^(\(FPC Slot \d+, PIC Slot \d+\) SPC\d+_PIC\d+ )?kmd\[\d{1,5}\]: (?P<msg_type>KMD_VPN_DOWN_ALARM_USER): VPN (?P<instance>\S+) from \d+\.\d+\.\d+\.\d+ is down\.', 4454, 2, 600, ['instance'])
         self.addLogPattern(r'^(\(FPC Slot \d+, PIC Slot \d+\) SPC\d+_PIC\d+ )?kmd\[\d{1,5}\]: (?P<msg_type>IKE negotiation failed) with error: [^\.]+\. IKE Version: \d+, VPN: (?P<instance>\S+) Gateway: ', 4455, 2, 600, ['instance'])
         self.addLogPattern(r'^(\(FPC Slot \d+, PIC Slot \d+\) SPC\d+_PIC\d+ )?kmd\[\d{1,5}\]: (?P<msg_type>IKE Phase-1: \S+ Policy) lookup failed', 4456, 3, 600, [])
         self.addLogPattern(r'^(\(FPC Slot \d+, PIC Slot \d+\) SPC\d+_PIC\d+ )?kmd\[\d{1,5}\]: (?P<msg_type>KMD_VPN_PV_PHASE1): IKE Phase-1 Failure: .+ \[spi=(?P<instance>\S+), src', 4457, 3, 600, ['instance'])
@@ -587,18 +600,18 @@ class Juniper(Device):
         self.addLogPattern(r'^(?P<instance>node\d\.fpc\d+) LUCHIP\(\d+\): pio_handle\(0x[0-9a-f]+\); \S+\(\) failed', 4460, 3, 0, ['instance'])
         self.addLogPattern(r'^(?P<instance>node\d\.fpc\d+) LUCHIP\(\d+\) IDMEM\[\d+\] read error', 4461, 3, 0, ['instance'])
         self.addLogPattern(r'^(?P<instance>node\d\.cpp\d+ swanhill\d+): XLR flow_held_mbuf \d+, raise above \d+, \d+th time', 4462, 2, 600, ['instance'])
-        self.addLogPattern(r'^(?P<instance>node\d\.cpp\d+ swanhill\d+): XLR flow_held_mbuf \d+, drop below \d+, exhaustion', 4463, 1, 600, ['instance'])
+        self.addLogPattern(r'^(?P<instance>node\d\.cpp\d+ swanhill\d+): XLR flow_held_mbuf \d+, drop below \d+, exhaustion', 4462, 1, 600, ['instance'])
 
         self.addLogPattern(r'^(?P<process>eswd)\[\d{1,5}\]: Bridge Address: add [0-9a-f]+:[0-9a-f+]', 4500, 0, 600, ['process'])
         self.addLogPattern(r'^(?P<process>eventd): sendto: No buffer space available', 4501, 0, 600, ['process'])
 
         self.addLogPattern(r'^PERF_MON: (?P<process>RTPERF_CPU)_THRESHOLD_EXCEEDED: (?P<instance>FPC \d+ PIC \d+) CPU utilization exceeds threshold', 4600, 2, 600, ['process','instance'])
-        self.addLogPattern(r'^PERF_MON: (?P<process>RTPERF_CPU)_USAGE_OK: (?P<instance>FPC \d+ PIC \d+) CPU utilization returns to normal', 4601, 1, 600, ['process','instance'])
+        self.addLogPattern(r'^PERF_MON: (?P<process>RTPERF_CPU)_USAGE_OK: (?P<instance>FPC \d+ PIC \d+) CPU utilization returns to normal', 4600, 1, 600, ['process','instance'])
 
         self.addLogPattern(r'^(?P<process>\S+)\[\d+\]: (?P<msg_type>LICENSE_EXPIRED_KEY_DELETED): License key "(?P<instance>.+)" has expired', 4700, 3, 600, ['process','instance'])
         self.addLogPattern(r'^(?P<process>\S+)\[\d+\]: (?P<msg_type>LICENSE_EXPIRED): License for feature (?P<instance>\S+) expired', 4701, 3, 600, ['process','instance'])
         self.addLogPattern(r'^(?P<process>alarmd)\[\d+\]: (?P<msg_type>Alarm) set: (?P<instance>.+) color=(?P<color>\S+), class=(?P<alarm>\S+), reason=', 4702, 2, 0, ['process','instance'])
-        self.addLogPattern(r'^(?P<process>alarmd)\[\d+\]: (?P<msg_type>Alarm) cleared: (?P<instance>.+) color=(?P<color>\S+), class=(?P<alarm>\S+), reason=', 4703, 1, 0, ['process','instance'])
-        self.addLogPattern(r'^(?P<process>craftd)\[\d+\]: \s*(?P<msg_type>\S+ alarm) set, (?P<instance>.+)', 4704, 2, 0, ['process','instance'])
-        self.addLogPattern(r'^(?P<process>craftd)\[\d+\]: (?P<msg_type>\S+ alarm) cleared, (?P<instance>.+)', 4705, 1, 0, ['process','instance'])
+        self.addLogPattern(r'^(?P<process>alarmd)\[\d+\]: (?P<msg_type>Alarm) cleared: (?P<instance>.+) color=(?P<color>\S+), class=(?P<alarm>\S+), reason=', 4702, 1, 0, ['process','instance'])
+        self.addLogPattern(r'^(?P<process>craftd)\[\d+\]: \s*(?P<msg_type>\S+ alarm) set, (?P<instance>.+)', 4703, 2, 0, ['process','instance'])
+        self.addLogPattern(r'^(?P<process>craftd)\[\d+\]: (?P<msg_type>\S+ alarm) cleared, (?P<instance>.+)', 4703, 1, 0, ['process','instance'])
 
