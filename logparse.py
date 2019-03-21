@@ -5,6 +5,7 @@ import re, time, random, sys, getopt, json, copy, socket
 from select import select
 from dateutil import parser
 from datetime import datetime
+from eprint import eprint
 
 import Device
 
@@ -16,7 +17,7 @@ def makeDate(datestring):
         d = parser.parse(datestring)
     except ValueError:
         if verbose > 0:
-            print "makeDate: %s is not a valid datetime" % datestring
+            eprint("makeDate: %s is not a valid datetime" % datestring)
 
     return str(d.strftime("%Y-%m-%dT%H:%M:%S.%f"))
 
@@ -28,6 +29,44 @@ def resolveHostname(ip):
     return host
 
 def generateDicts(sock):
+    severityMap = {
+        "0": "emerg",
+        "1": "alert",
+        "2": "crit",
+        "3": "err",
+        "4": "warning",
+        "5": "notice",
+        "6": "info",
+        "7": "debug"
+    }
+
+    facilityMap = {
+        "0": "kernel",
+        "1": "user",
+        "2": "mail",
+        "3": "system",
+        "4": "auth",
+        "5": "syslog",
+        "6": "lpd",
+        "7": "news",
+        "8": "uucp",
+        "9": "time",
+        "10": "auth",
+        "11": "ftp",
+        "12": "ntp",
+        "13": "logaudit",
+        "14": "logalert",
+        "15": "clock",
+        "16": "local0",
+        "17": "local1",
+        "18": "local2",
+        "19": "local3",
+        "20": "local4",
+        "21": "local5",
+        "22": "local6",
+        "23": "local7"
+    }
+
     skip = 0
     skipcount = 0
 
@@ -87,8 +126,8 @@ def generateDicts(sock):
 
                     if matched:
                         if pname == 'pri':
-                            currentDict['severity'] = str(int(matched.group('pri')) & 7)
-                            currentDict['facility'] = str(int(matched.group('pri')) >> 3)
+                            currentDict['severity'] = severityMap[str(int(matched.group('pri')) & 7)]
+                            currentDict['facility'] = facilityMap[str(int(matched.group('pri')) >> 3 & 23)]
 
                         currentDict[pname] = matched.group(pname)
 
@@ -100,18 +139,18 @@ def generateDicts(sock):
 
                 # None of the patterns matched for this field
                 if pname not in currentDict:
-                    print "Did not match for %s: %s" % (pname, line)
+                    eprint("Did not match for %s: %s" % (pname, line))
 
             # Chop off any remaining crap
             line = line.rstrip()
 
             # Finished parsing but did not consume the whole line (should never happen)
             if len(line) > 0:
-                print "still some line left: [%s]" % line
+                eprint("still some line left: [%s]" % line)
 
             # Did not match anything at all?
             if currentDict == {}:
-                print "matched nothing: [%s]" % line
+                eprint("matched nothing: [%s]" % line)
                 continue
 
             elif currentDict['text'].find('last message repeated') == 0 or currentDict['text'].find('RT_FLOW') == 0:
@@ -129,7 +168,7 @@ def generateDicts(sock):
                     currentDict['host'] = currentDict['host'].lower()
 
                 try:
-                    if currentDict['host'].find('v-') == 0:
+                    if currentDict['host'].find('v-') >= 0 and currentDict['host'].find('-net') >= 7:
                         vendor = linux
 
                     elif currentDict['host'].find('bar') == 0 or currentDict['host'].find('bcr') == 0 or currentDict['host'].find('scr') == 0 or currentDict['host'].find('sff') == 0 or currentDict['host'].find('mfw') == 0 or currentDict['host'].find('re') == 0 or currentDict['host'].find('bmr') == 0  or currentDict['host'].find('fw') == 0:
@@ -151,19 +190,22 @@ def generateDicts(sock):
                         vendor = force10
 
                     if vendor:
+                        currentDict['vendor'] = vendor.vendor
                         if vendor.matchLogPattern(currentDict):
                             if currentDict['state'] == 0:
                                 skip = 1
                                 skipcount += 1
                         else:
-                            print "Did not match %s message for host %s: %s" % (vendor.vendor, currentDict['host'], currentDict['text'])
+                            eprint("Did not match %s message for host %s: %s" % (vendor.vendor, currentDict['host'], currentDict['text']))
+                            # Flag as unmatched message
+                            currentDict['state'] = 5
 
                     else:
-                        print "Did not match host pattern for host: %s  message: %s" % (currentDict['host'], currentDict['text'])
+                        eprint("Did not match host pattern for host: %s  message: %s" % (currentDict['host'], currentDict['text']))
 
 
                 except KeyError:
-                    print "Field not found:", currentDict
+                    eprint("Field not found:", currentDict)
 
                     skip = 1
                     skipcount += 1
@@ -172,113 +214,61 @@ def generateDicts(sock):
                     yield(currentDict)
 
 
-opts, args = getopt.getopt(sys.argv[1:], "jvr")
+opts, args = getopt.getopt(sys.argv[1:], "t:p:v")
 
 matches = {}
 messages = []
 verbose = 0
-use_json = 0
-rsyslog_json = 0
+target_host = 'localhost'
+target_port = 514
 minute = datetime.utcnow().strftime("%M")
-
-# define mandatory fields here
-baseDict = {
-    "host": 'UNKNOWN',
-    "facility": 'UNKNOWN',
-    "severity": 'debug',
-    "key": 'UNKNOWN',
-    "message": 'UNKNOWN'
-}
-
-severityMap = {
-    "0": "emerg",
-    "1": "alert",
-    "2": "crit",
-    "3": "err",
-    "4": "warning",
-    "5": "notice",
-    "6": "info",
-    "7": "debug"
-}
-
-facilityMap = {
-    "0": "kernel",
-    "1": "user",
-    "2": "mail",
-    "3": "system",
-    "4": "auth",
-    "5": "syslog",
-    "6": "lpd",
-    "7": "news",
-    "8": "uucp",
-    "9": "time",
-    "10": "auth",
-    "11": "ftp",
-    "12": "ntp",
-    "13": "logaudit",
-    "14": "logalert",
-    "15": "clock",
-    "16": "local0",
-    "17": "local1",
-    "18": "local2",
-    "19": "local3",
-    "20": "local4",
-    "21": "local5",
-    "22": "local6",
-    "23": "local7"
-}
 
 for o, a in opts:
     if o == '-v':
         verbose = 1
-    if o == '-j':
-        use_json = 1
-    if o == '-r':
-        rsyslog_json = 1
+    if o == '-t':
+        target_host = a
+    if o == '-p':
+        target_port = int(a)
 
-syslogTuple = ('', 514)
-syslogSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-syslogSocket.bind(syslogTuple)
+listenTuple = ('', 514)
+listenSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+listenSocket.bind(listenTuple)
 
-for msgDict in generateDicts(syslogSocket):
-    #print "log: %s" % msgDict
-    messages.append(msgDict)
+sendTuple = (target_host, int(target_port))
+sendSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sendSocket.connect(sendTuple)
 
-    if use_json > 0:
-        jsonDict = copy.deepcopy(baseDict)
-        if 'date' not in msgDict:
-            jsonDict['@timestamp'] = makeDate('now')
-        else:
-            jsonDict['@timestamp'] = makeDate(msgDict['date'].rstrip(':'))
+eprint("Sending to %s port %d" % (target_host, target_port))
 
-        jsonDict['host'] = msgDict['host']
-        jsonDict['message'] = msgDict['text']
-        if 'severity' in msgDict:
-            jsonDict['severity'] = severityMap[msgDict['severity']]
-            jsonDict['facility'] = facilityMap[msgDict['facility']]
+for msgDict in generateDicts(listenSocket):
+    if 'date' not in msgDict:
+        msgDict['date'] = makeDate('now')
+    else:
+        msgDict['date'] = makeDate(msgDict['date'].rstrip(':'))
 
-        if 'msg_type' in msgDict:
-            jsonDict['msg_type'] = msgDict['msg_type']
-        else:
-            jsonDict['msg_type'] = msgDict['text'].partition(' ')[0].partition('[')[0]
+    if 'msg_type' not in msgDict:
+        msgDict['msg_type'] = msgDict['text'].partition(' ')[0].partition('[')[0]
 
-        if 'id' in msgDict:
-            jsonDict['instance'] = msgDict['id'] + '_' + jsonDict['host']
-            if 'key_fields' in msgDict:
-                for f in msgDict['key_fields']:
-                    jsonDict['instance'] += '_' + msgDict[f]
-            jsonDict['key'] = jsonDict['instance'] + '_state:' + str(msgDict['state'])
-        else:
-            jsonDict['key'] = jsonDict['host'] + '_' + msgDict['text']
+    if 'id' in msgDict:
+        msgDict['instance'] = msgDict['id'] + '_' + msgDict['host']
+        if 'key_fields' in msgDict:
+            for f in msgDict['key_fields']:
+                msgDict['instance'] += '_' + msgDict[f]
+            msgDict.pop('key_fields', None)
+        msgDict['key'] = msgDict['instance'] + '_state:' + str(msgDict['state'])
+    else:
+        msgDict['key'] = msgDict['host'] + '_' + msgDict['text']
 
-        print json.dumps(jsonDict)
+    eprint("Sending: %s" % (msgDict))
+    sendSocket.send(json.dumps(msgDict) + '\n')
 
     if verbose > 0:
-        print msgDict
+        eprint(msgDict)
 
     if int(datetime.utcnow().strftime("%M")) != minute:
         minute = int(datetime.now().strftime("%M"))
         if verbose > 0:
-            print "%28s Messages parsed: %d" % (str(datetime.utcnow()), len(messages))
+            eprint("%28s Messages parsed: %d" % (str(datetime.utcnow()), len(messages)))
 
 
