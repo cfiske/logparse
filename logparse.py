@@ -95,7 +95,7 @@ def generateDicts(sock):
         pats['host'].append(re.compile(i + r'(?P<space>\s+)\S+', re.IGNORECASE))
 
     # Rest of line
-    pats['text'] = [re.compile(r'(?P<text>.*)(?P<space>\s*)$')]
+    pats['message'] = [re.compile(r'(?P<message>.*)(?P<space>\s*)$')]
 
     currentDict = {}
 
@@ -116,18 +116,24 @@ def generateDicts(sock):
             currentDict = {}
 
             line, (src_ip, port) = s.recvfrom(8192)
+
+            # Pristine copy of what we received
+            currentDict['raw_message'] = line
+
             # Strip any leading junk
             if line[0] == '\0':
                 line = line.lstrip('\r\n\0 ')
 
-            for pname in ['pri', 'date', 'host', 'text']:
+            for pname in ['pri', 'date', 'host', 'message']:
                 for p in pats[pname]:
                     matched = p.match(line)
 
                     if matched:
                         if pname == 'pri':
-                            currentDict['severity'] = severityMap[str(int(matched.group('pri')) & 7)]
-                            currentDict['facility'] = facilityMap[str(int(matched.group('pri')) >> 3 & 23)]
+                            currentDict['severity_int'] = str(int(matched.group('pri')) & 7)
+                            currentDict['facility_int'] = str(int(matched.group('pri')) >> 3 & 23)
+                            currentDict['severity_label'] = severityMap[currentDict['severity_int']]
+                            currentDict['facility_label'] = facilityMap[currentDict['facility_int']]
 
                         currentDict[pname] = matched.group(pname)
 
@@ -153,7 +159,7 @@ def generateDicts(sock):
                 eprint("matched nothing: [%s]" % line)
                 continue
 
-            elif currentDict['text'].find('last message repeated') == 0 or currentDict['text'].find('RT_FLOW') == 0:
+            elif currentDict['message'].find('last message repeated') == 0 or currentDict['message'].find('RT_FLOW') == 0:
                 skip = 1
                 break
 
@@ -196,12 +202,12 @@ def generateDicts(sock):
                                 skip = 1
                                 skipcount += 1
                         else:
-                            eprint("Did not match %s message for host %s: %s" % (vendor.vendor, currentDict['host'], currentDict['text']))
+                            eprint("Did not match %s message for host %s: %s" % (vendor.vendor, currentDict['host'], currentDict['message']))
                             # Flag as unmatched message
                             currentDict['state'] = 5
 
                     else:
-                        eprint("Did not match host pattern for host: %s  message: %s" % (currentDict['host'], currentDict['text']))
+                        eprint("Did not match host pattern for host: %s  message: %s" % (currentDict['host'], currentDict['message']))
 
 
                 except KeyError:
@@ -214,13 +220,14 @@ def generateDicts(sock):
                     yield(currentDict)
 
 
-opts, args = getopt.getopt(sys.argv[1:], "t:p:v")
+opts, args = getopt.getopt(sys.argv[1:], "l:t:p:v")
 
 matches = {}
 messages = []
 verbose = 0
+listen_port = 514
 target_host = 'localhost'
-target_port = 514
+target_port = 5150
 minute = datetime.utcnow().strftime("%M")
 
 for o, a in opts:
@@ -230,15 +237,18 @@ for o, a in opts:
         target_host = a
     if o == '-p':
         target_port = int(a)
+    if o == '-l':
+        listen_port = int(a)
 
-listenTuple = ('', 514)
+listenTuple = ('', listen_port)
 listenSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 listenSocket.bind(listenTuple)
 
-sendTuple = (target_host, int(target_port))
+sendTuple = (target_host, target_port)
 sendSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sendSocket.connect(sendTuple)
 
+eprint("Listening on port %d" % (listen_port))
 eprint("Sending to %s port %d" % (target_host, target_port))
 
 for msgDict in generateDicts(listenSocket):
@@ -248,7 +258,7 @@ for msgDict in generateDicts(listenSocket):
         msgDict['date'] = makeDate(msgDict['date'].rstrip(':'))
 
     if 'msg_type' not in msgDict:
-        msgDict['msg_type'] = msgDict['text'].partition(' ')[0].partition('[')[0]
+        msgDict['msg_type'] = msgDict['message'].partition(' ')[0].partition('[')[0]
 
     if 'id' in msgDict:
         msgDict['instance'] = msgDict['id'] + '_' + msgDict['host']
@@ -258,10 +268,14 @@ for msgDict in generateDicts(listenSocket):
             msgDict.pop('key_fields', None)
         msgDict['key'] = msgDict['instance'] + '_state:' + str(msgDict['state'])
     else:
-        msgDict['key'] = msgDict['host'] + '_' + msgDict['text']
+        msgDict['key'] = msgDict['host'] + '_' + msgDict['message']
 
-    eprint("Sending: %s" % (msgDict))
-    sendSocket.send(json.dumps(msgDict) + '\n')
+    try:
+        sendSocket.send(json.dumps(msgDict) + '\n')
+    except socket.error:
+        time.sleep(1)
+        sendSocket.connect(sendTuple)
+        sendSocket.send(json.dumps(msgDict) + '\n')
 
     if verbose > 0:
         eprint(msgDict)
