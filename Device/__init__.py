@@ -16,12 +16,12 @@ class Device(object):
 
     def matchLogPattern(self, message):
         for p in self.logPatterns:
-            matched = p.match(message['text'])
+            matched = p.match(message['message'])
 
             if matched:
                 pattern = self.logPatterns[p]
                 if self.verbose is True:
-                    print "matched pattern id %s with text: %s" % (pattern['id'], message['text'])
+                    print "matched pattern id %s with text: %s" % (pattern['id'], message['message'])
 
                 # Add the fields defined in the default pattern spec
                 for k in pattern:
