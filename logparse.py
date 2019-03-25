@@ -69,6 +69,9 @@ def generateDicts(sock):
 
     skip = 0
     skipcount = 0
+    sminute = datetime.utcnow().strftime("%M")
+    readcount = 0
+    yieldcount = 0
 
     # Compile regex patterns for iteration on each component of the message
     pats = {}
@@ -111,6 +114,8 @@ def generateDicts(sock):
         inready, outready, excready = select([sock], [], [])
 
         for s in inready:
+            readcount += 1
+
             # We can safely init the dict here because multiline messages are
             # still contained within single datagrams
             currentDict = {}
@@ -159,7 +164,7 @@ def generateDicts(sock):
                 eprint("matched nothing: [%s]" % line)
                 continue
 
-            elif currentDict['message'].find('last message repeated') == 0 or currentDict['message'].find('RT_FLOW') == 0:
+            elif currentDict['message'].find('last message repeated') == 0:
                 skip = 1
                 break
 
@@ -197,11 +202,7 @@ def generateDicts(sock):
 
                     if vendor:
                         currentDict['vendor'] = vendor.vendor
-                        if vendor.matchLogPattern(currentDict):
-                            if currentDict['state'] == 0:
-                                skip = 1
-                                skipcount += 1
-                        else:
+                        if not vendor.matchLogPattern(currentDict):
                             eprint("Did not match %s message for host %s: %s" % (vendor.vendor, currentDict['host'], currentDict['message']))
                             # Flag as unmatched message
                             currentDict['state'] = 5
@@ -218,7 +219,11 @@ def generateDicts(sock):
 
                 if skip == 0:
                     yield(currentDict)
+                    yieldcount += 1
 
+                if int(datetime.utcnow().strftime("%M")) != sminute:
+                    sminute = int(datetime.now().strftime("%M"))
+                    eprint("%28s Messages read: %d yielded: %d skipped: %d" % (str(datetime.utcnow()), readcount, yieldcount, skipcount))
 
 opts, args = getopt.getopt(sys.argv[1:], "l:t:p:v")
 
