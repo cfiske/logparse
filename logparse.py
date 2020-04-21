@@ -22,10 +22,17 @@ def makeDate(datestring):
     return str(d.strftime("%Y-%m-%dT%H:%M:%S.%f"))
 
 def resolveHostname(ip):
+    global dnsDict
+
+    if ip in dnsDict:
+        return dnsDict[ip]
+
     try:
         (host, null, null) = socket.gethostbyaddr(ip)
     except socket.herror:
         host = ip
+
+    dnsDict[ip] = host
     return host
 
 def generateDicts(sock):
@@ -226,6 +233,8 @@ def generateDicts(sock):
                     eprint("%28s Messages read: %d yielded: %d skipped: %d" % (str(datetime.utcnow()), readcount, yieldcount, skipcount))
 
 opts, args = getopt.getopt(sys.argv[1:], "l:t:p:v")
+
+dnsDict = {}
 
 matches = {}
 messages = []
