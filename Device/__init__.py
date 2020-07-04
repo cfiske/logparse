@@ -21,7 +21,7 @@ class Device(object):
             if matched:
                 pattern = self.logPatterns[p]
                 if self.verbose is True:
-                    print "matched pattern id %s with text: %s" % (pattern['id'], message['message'])
+                    print("matched pattern id {} with text: {}", pattern['id'], message['message'])
 
                 # Add the fields defined in the default pattern spec
                 for k in pattern:
@@ -63,25 +63,25 @@ class Device(object):
         elif isinstance(pattern, str) and len(pattern) > 0:
             cpatterns.append(re.compile(pattern))
         else:
-            print "error: pattern must not be empty or blank. skipping"
+            print("error: pattern must not be empty or blank. skipping")
             return 0
 
         if isinstance(msg_id, (str, int)):
             msg_id = self.vendor + '-' + str(msg_id)
         else:
-            print "error: msg_id must be type str or int. skipping: %s" % (pattern)
+            print("error: msg_id must be type str or int. skipping: {}", pattern)
             return 0
 
         if not isinstance(msg_state, int):
-            print "warning: msg_state must be type int. defaulting to stateless: %s" % (pattern)
+            print("warning: msg_state must be type int. defaulting to stateless: {}", pattern)
             msg_state = 3
 
         if not isinstance(msg_ttl, int):
-            print "warning: msg_ttl must be type int. defaulting to 0: %s" % (pattern)
+            print("warning: msg_ttl must be type int. defaulting to 0: {}", pattern)
             msg_ttl = 0
 
         if not isinstance(msg_keys, list):
-            print "warning: msg_keys must be type list. defaulting to empty: %s" % (pattern)
+            print("warning: msg_keys must be type list. defaulting to empty: {}", pattern)
             msg_keys = []
 
         pattern_dict = {}
@@ -92,7 +92,7 @@ class Device(object):
 
         for cp in cpatterns:
             if cp in self.logPatterns:
-                print "warning: duplicate pattern. skipping: (%s) %s" % (self.logPatterns[cp]['id'], pattern)
+                print("warning: duplicate pattern. skipping: ({}) {}", self.logPatterns[cp]['id'], pattern)
             else:
                 self.logPatterns[cp] = pattern_dict
 
