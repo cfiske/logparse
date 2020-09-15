@@ -28,7 +28,7 @@ def resolveHostname(ip):
         return dnsDict[ip]
 
     try:
-        (host, null, null) = socket.gethostbyaddr(ip)
+        (host, _hostaliases, _hostip) = socket.gethostbyaddr(ip)
     except socket.herror:
         host = ip
 
