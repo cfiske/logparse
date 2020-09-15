@@ -127,7 +127,7 @@ def generateDicts(sock):
             # still contained within single datagrams
             currentDict = {}
 
-            line, (src_ip, port) = s.recvfrom(8192)
+            line, (src_ip, _port) = s.recvfrom(8192)
 
             # Pristine copy of what we received
             currentDict['raw_message'] = line
@@ -166,8 +166,8 @@ def generateDicts(sock):
             if len(line) > 0:
                 eprint("still some line left: [%s]" % line)
 
-            # Did not match anything at all?
-            if currentDict == {}:
+            # If there is only one key it is raw_message and thus we have not matched anything
+            if len(currentDict) == 1:
                 eprint("matched nothing: [%s]" % line)
                 continue
 
