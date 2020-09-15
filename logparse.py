@@ -129,6 +129,9 @@ def generateDicts(sock):
 
             line, (src_ip, _port) = s.recvfrom(8192)
 
+            # Convert bytes to string
+            line = line.decode().strip('\r\n')
+
             # Pristine copy of what we received
             currentDict['raw_message'] = line
 
@@ -139,7 +142,7 @@ def generateDicts(sock):
             for pname in ['pri', 'date', 'host', 'message']:
                 for p in pats[pname]:
                     matched = p.match(line)
-
+                    
                     if matched:
                         if pname == 'pri':
                             currentDict['severity_int'] = str(int(matched.group('pri')) & 7)
@@ -285,11 +288,11 @@ for msgDict in generateDicts(listenSocket):
         msgDict['key'] = msgDict['host'] + '_' + msgDict['message']
 
     try:
-        sendSocket.send(json.dumps(msgDict) + '\n')
+        sendSocket.send(json.dumps(msgDict).encode() + b'\n')
     except socket.error:
         time.sleep(1)
         sendSocket.connect(sendTuple)
-        sendSocket.send(json.dumps(msgDict) + '\n')
+        sendSocket.send(json.dumps(msgDict).encode() + b'\n')
 
     if verbose > 0:
         eprint(msgDict)
